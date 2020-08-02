@@ -44,5 +44,5 @@ util.o: util.c util.h
 	$(CC) -c $(CFLAGS) $<
 
 clean:
-	$(RM) *.o libcubiomes.a find_quadhuts find_origin_structures
+	$(RM) *.o libcubiomes.a find_origin_structures
 
