@@ -110,6 +110,10 @@ void usage() {
     fprintf(stderr, "        (Defaults to 0)\n");
     fprintf(stderr, "    --end_seed=<integer>\n");
     fprintf(stderr, "        (Defaults to 281474976710656)\n");
+    fprintf(stderr, "    --work_unit=<integer>\n");
+    fprintf(stderr, "        (Optional, specifies a work unit 0-255)\n");
+    fprintf(stderr, "    --num_units=<integer>\n");
+    fprintf(stderr, "        (Defaults to 1)\n");
     fprintf(stderr, "    --quadhut_list=<file path>\n");
     fprintf(stderr, "        (Defaults to ./seeds/quadhut_list.txt)\n");
     fprintf(stderr, "    --num_threads=<integer>\n");
@@ -122,6 +126,9 @@ int main(int argc, char *argv[]) {
     char *quadhut_list_filename = DEFAULT_QUADHUT_LIST;
     char *file_access_mode = "a";
     int num_threads = DEFAULT_NUM_THREADS;
+
+    int work_unit = -1;
+    int num_units = 1;
     
     char *endptr;
     for(int a = 1; a < argc; ++a) {
@@ -129,6 +136,10 @@ int main(int argc, char *argv[]) {
 	    start_seed = strtoll(argv[a] + 13, &endptr, 0);
 	} else if(!strncmp(argv[a], "--end_seed=", 11)) {
 	    end_seed = strtoll(argv[a] + 11, &endptr, 0);
+	} else if(!strncmp(argv[a], "--work_unit=", 12)) {
+	    work_unit = (int)strtoll(argv[a] + 12, &endptr, 0);
+	} else if(!strncmp(argv[a], "--num_units=", 12)) {
+	    num_units = (int)strtoll(argv[a] + 12, &endptr, 0);
 	} else if(!strncmp(argv[a], "--quadhut_list=", 15)) {
 	    quadhut_list_filename = argv[a] + 15;
 	} else if(!strncmp(argv[a], "--num_threads=", 14)) {
@@ -141,6 +152,11 @@ int main(int argc, char *argv[]) {
 	    usage();
 	    exit(-1);
 	}
+    }
+
+    if(work_unit >= 0 && work_unit < 256) {
+	start_seed = 1099511627776*((int64_t)work_unit);
+	end_seed = start_seed + 1099511627776*((int64_t)num_units);
     }
 
     FILE *quadhut_list = fopen(quadhut_list_filename, file_access_mode);
