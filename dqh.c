@@ -12,7 +12,8 @@
 int main()
 {
     long scnt, *seeds;
-    seeds = loadSavedSeeds("quadbases_Q1.txt", &scnt);
+    //seeds = loadSavedSeeds("quadbases_Q1b.txt", &scnt);
+    seeds = loadSavedSeeds("./seeds/origin_quadhut_bases.txt", &scnt);
 
     // (baseSeed - regionX*341873128712 - regionZ*132897987541) & 0xffffffffffff;
     // 132897987541 = 0x1ef1565bd5
@@ -25,7 +26,8 @@ int main()
     // => required: (D + n*(1<<48) + 132897987541*z) % 341873128712 == 0
 
 
-    const long range = 530;
+    //const long range = 530;
+    const long range = 64;
     int i;
 
     printf("i_start = ");

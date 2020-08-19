@@ -19,7 +19,7 @@ all: release
 debug: CFLAGS += -DDEBUG -O0 -ggdb3
 debug: libcubiomes
 release: CFLAGS += -O3 -march=native
-release: libcubiomes find_origin_structures
+release: libcubiomes find_origin_structures dqh
 
 libcubiomes: CFLAGS += -fPIC
 libcubiomes: layers.o generator.o finders.o util.o
@@ -48,5 +48,5 @@ util.o: util.c util.h
 	$(CC) -c $(CFLAGS) $<
 
 clean:
-	$(RM) *.o libcubiomes.a find_quadhuts find_compactbiomes
+	$(RM) *.o libcubiomes.a find_origin_structures
 
