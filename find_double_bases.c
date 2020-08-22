@@ -10,11 +10,12 @@
 
 typedef struct {
     int tid;
-    int64_t *primary_list;
-    int64_t *secondary_list;
-    int primary_start;
-    int primary_end;
-    FILE *out_list;
+    int range;
+    int64_t *plist;
+    int64_t pcnt;
+    int64_t *slist;
+    int64_t scnt;
+    FILE *out;
 } threadinfo;
 
 #ifdef USE_PTHREAD
@@ -28,12 +29,12 @@ HANDLE ioMutex;
  */
 void writeSeed(int tid, int64_t seed, int dx, int dz, FILE *out_list) {
 #ifdef USE_PTHREAD
-    pthread_mutex_lock(&ioMutetex);
+    pthread_mutex_lock(&ioMutex);
 #else
     WaitForSingleObject(ioMutex, INFINITE);
 #endif
 
-    printf("%ld: (%d,%d)\n", seed, dx, dz);
+    printf("Thread %d: %ld: (%d,%d)\n", tid, seed, dx, dz);
     fprintf(out_list, "%ld: (%d,%d)\n", seed, dx, dz);
     fflush(out_list);
 
@@ -50,14 +51,76 @@ void *findDoubleQuadStructuresThread(void *arg) {
 #else
 DWORD WINAPI findDoubleQuadStructuresThread(LPVOID arg) {
 #endif
-    threadinfo info = *(threadinfo*)arg;
+    threadinfo *info = (threadinfo*)arg;
+    int tid = info->tid;
+    int range = info->range;
+    int64_t *plist = info->plist;
+    int64_t pcnt = info->pcnt;
+    int64_t *slist = info->slist;
+    int64_t scnt = info->scnt;
+    FILE *out = info->out;
+
+    // cubitect's method for calculating the offset between two seeds:
+    //
+    // seed2 = (seed1 - 341873128712*dx - 132897987541*dz) mod 2^48
+    // diff = (seed2 - seed1) mod 2^48
+    // => diff + 341873128712*dx + 132897987541*dz = n*(2^48)
+    // => diff + n*(2^48) + 132897987541*dz = -341873128712*dx
+    // => (diff + n*(2^48) + 132897987541*dz) mod 341873128712 = 0
+
+    for(int64_t i = 0; i < pcnt; ++i) {
+	for(int64_t j = 0; j < scnt; ++j) {
+	    int64_t diff = (slist[j] - plist[i]) & 0xffffffffffff;
+	    if(diff == 0) continue;
+
+	    const int64_t start = diff - range * 132897987541;
+	    const int64_t end = diff + range * 132897987541;
+
+	    for(int64_t lhs = start; lhs <= end; lhs += 132897987541) {
+		// lhs mod 8 = 0 is a requirement for lhs mod 341873128712 = 0
+		if(lhs & 0x7) continue;
+
+		int64_t mod = lhs % 341873128712;
+		
+		if(mod == 0) {
+		    int64_t dx = (lhs) / 341873128712;
+		    int64_t dz = -(lhs - diff) / 132897987541;
+
+		    //if(dx >= -range && dx <= range) {
+			writeSeed(tid, plist[i], dx, dz, out);
+		    //}
+		}
+		if((lhs + (1L<<48)) % 341873128712 == 0) {
+		    int64_t dx = (lhs + (1L<<48)) / 341873128712;
+		    int64_t dz = -(lhs - diff) / 132897987541;
+
+		    //if(dx >= -range && dx <= range) {
+			writeSeed(tid, plist[i], dx, dz, out);
+		    //}
+		}
+		if((lhs - (1L<<48)) % 341873128712 == 0) {
+		    int64_t dx = (lhs - (1L<<48)) / 341873128712;
+		    int64_t dz = -(lhs - diff) / 132897987541;
+
+		    //if(dx >= -range && dx <= range) {
+			writeSeed(tid, plist[i], dx, dz, out);
+		    //}
+		}
+	    }
+	}
+    }
+
+#ifdef USE_PTHREAD
+    pthread_exit(NULL);
+#endif
+    return 0;
 }
 
 void usage() {
     fprintf(stderr, "USAGE:\n");
     fprintf(stderr, "  find_double_bases [OPTION]...\n");
     fprintf(stderr, "    --help    (-h)\n");
-    fprintf(stderr, "    --max_distance=<integer>\n");
+    fprintf(stderr, "    --range=<integer>\n");
     fprintf(stderr, "        (Defaults to %d regions)\n", DEFAULT_MAX_DISTANCE);
     fprintf(stderr, "    --primary_list=<file path>\n");
     fprintf(stderr, "        (Required)\n");
@@ -70,7 +133,7 @@ void usage() {
 }
 
 int main(int argc, char *argv[]) {
-    int max_distance = DEFAULT_MAX_DISTANCE;
+    int range = DEFAULT_MAX_DISTANCE;
     char *primary_list_filename = NULL;
     char *secondary_list_filename = NULL;
     char *out_list_filename = DEFAULT_OUT_LIST;
@@ -79,8 +142,8 @@ int main(int argc, char *argv[]) {
     // parse arguments
     char *endptr;
     for(int a = 1; a < argc; ++a) {
-	if(!strncmp(argv[a], "--max_distance=", 15)) {
-	    max_distance = (int)strtoll(argv[a] + 15, &endptr, 0);
+	if(!strncmp(argv[a], "--range=", 15)) {
+	    range = (int)strtoll(argv[a] + 15, &endptr, 0);
 	} else if(!strncmp(argv[a], "--primary_list=", 15)) {
 	    primary_list_filename = argv[a] + 15;
 	} else if(!strncmp(argv[a], "--secondary_list=", 17)) {
@@ -142,12 +205,16 @@ int main(int argc, char *argv[]) {
     thread_id_t *threads = malloc(sizeof(thread_id_t) * num_threads);
     threadinfo *info = malloc(sizeof(threadinfo) * num_threads);
     for(int t = 0; t < num_threads; ++t) {
+	int64_t primary_start = t * pcnt / num_threads;
+	int64_t primary_end = (t + 1) * pcnt / num_threads;
+
 	info[t].tid = t;
-	info[t].primary_list = primary_seeds;
-	info[t].secondary_list = secondary_seeds;
-	info[t].primary_start = t * pcnt / num_threads;
-	info[t].primary_end = (t + 1) * pcnt / num_threads;
-	info[t].out_list = out_list;
+	info[t].range = range;
+	info[t].plist = &primary_seeds[primary_start];
+	info[t].pcnt = primary_end - primary_start;
+	info[t].slist = secondary_seeds;
+	info[t].scnt = scnt;
+	info[t].out = out_list;
     }
 
     // create search threads
