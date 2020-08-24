@@ -35,6 +35,7 @@ int main(int argc, char *argv[]) {
 	JAVA_NEXT_INT24(s11, x11); if((x11 & 0x7) > upper) continue;
 	JAVA_NEXT_INT24(s11, z11); if((z11 & 0x7) > upper) continue;
 
+	// check if first diagonal regions can be in range
 	x00 = (x00 & 0x7) + 16;
 	z00 = (z00 & 0x7) + 16;
 	x11 &= 0x7;
@@ -51,6 +52,7 @@ int main(int argc, char *argv[]) {
 	JAVA_NEXT_INT24(s10, x10); if((x10 & 0x7) < lower) continue;
 	JAVA_NEXT_INT24(s10, z10); if((z10 & 0x7) > upper) continue;
 
+	// check if second diagonal regions can be in range
 	x01 &= 0x7;
 	z01 = (z01 & 0x7) + 16;
 	x10 = (x10 & 0x7) + 16;
@@ -59,6 +61,7 @@ int main(int argc, char *argv[]) {
 	z = (z10 + 32) - z01;
 	if(x*x + z*z > 255) continue;
 
+	// check if all huts can be in range
 	float sqrad = getEnclosingRadius(
 	    x00, z00, x11, z11, x01, z01, x10, z10,
 	    7+1, 7+43+1, 9+1,
