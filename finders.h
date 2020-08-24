@@ -714,6 +714,7 @@ static inline float isQuadBase(const StructureConfig sconf, int64_t seed, int ra
 {
     switch(sconf.structType)
     {
+    case Feature:
     case Swamp_Hut:
         if (radius == 128)
             return isQuadBaseFeature24(sconf, seed, 7+1, 7+43+1, 9+1);
