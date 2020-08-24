@@ -13,12 +13,11 @@
  * bottommost 20 bits of the seed
  */
 int main(int argc, char *argv[]) {
-    int range = (argc > 1) ? atoi(argv[1]) : 6;
+    int range = (argc > 1) ? atoi(argv[1]) : 3;
     int lower = 8 - range;
     int upper = range - 1;
 
-    //for(int64_t seed = 0; seed < 0x100000; ++seed) {
-    for(int64_t seed = 0x43f18; seed < 0x43f19; ++seed) {
+    for(int64_t seed = 0; seed < 0x100000; ++seed) {
 	int64_t s00 = seed;
 	int64_t s01 = 341873128712 + seed;
 	int64_t s10 = 132897987541 + seed;
@@ -36,12 +35,12 @@ int main(int argc, char *argv[]) {
 	JAVA_NEXT_INT24(s11, x11); if((x11 & 0x7) > upper) continue;
 	JAVA_NEXT_INT24(s11, z11); if((z11 & 0x7) > upper) continue;
 
-	x00 = (x00 & 0x7) - 16;
-	z00 = (z00 & 0x7) - 16;
+	x00 = (x00 & 0x7) + 16;
+	z00 = (z00 & 0x7) + 16;
 	x11 &= 0x7;
 	z11 &= 0x7;
-	x = x11 - x00;
-	z = z11 - z00;
+	x = (x11 + 32) - x00;
+	z = (z11 + 32) - z00;
 	if(x*x + z*z > 255) continue;
 
 	s01 ^= K;
@@ -53,11 +52,11 @@ int main(int argc, char *argv[]) {
 	JAVA_NEXT_INT24(s10, z10); if((z10 & 0x7) > upper) continue;
 
 	x01 &= 0x7;
-	z01 = (z01 & 0x7) - 16;
-	x10 = (x10 & 0x7) - 16;
+	z01 = (z01 & 0x7) + 16;
+	x10 = (x10 & 0x7) + 16;
 	z10 &= 0x7;
-	x = x01 - x10;
-	z = z10 - z01;
+	x = (x01 + 32) - x10;
+	z = (z10 + 32) - z01;
 	if(x*x + z*z > 255) continue;
 
 	float sqrad = getEnclosingRadius(
@@ -68,13 +67,6 @@ int main(int argc, char *argv[]) {
 
 	if(sqrad < 128) {
 	    printf("%#07x\n", (unsigned int)seed);
-	} else {
-	    printf("too far\n");
-	    printf("(%d,%d)\n", x00, z00);
-	    printf("(%d,%d)\n", x01, z01);
-	    printf("(%d,%d)\n", x10, z10);
-	    printf("(%d,%d)\n", x11, z11);
-	    printf("%f\n", sqrad);
 	}
     }
 
