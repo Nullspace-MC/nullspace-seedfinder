@@ -10,12 +10,18 @@ const int64_t lowerBits[] = {
     0x9371a, 0xa5a08, 0xb5e18, 0xc751a, 0xf520a
 };
 
+const char *baseSeedsPath = "./seeds/qh_bases.txt";
+
 /* finds lower 48 bits of seeds that can potentially yield quad bases
  *
  * saves results to "./seeds/qh_bases.txt"
  */
 int main(int argc, char *argv[]) {
-    FILE *baseSeeds = fopen("./seeds/qh_bases.txt", "w");
+    FILE *baseSeeds = fopen(baseSeedsPath, "w");
+    if(baseSeeds == NULL) {
+	fprintf(stderr, "Could not open file \"%s\"\n", baseSeedsPath);
+	exit(1);
+    }
 
     for(int64_t u = 0; u < 281474976710656; u += 0x100000) {
 	for(int l = 0; l < lowerBitsCount; ++l) {
