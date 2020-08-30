@@ -20,6 +20,8 @@ void *findMultiBasesThread(void *arg);
 DWORD WINAPI findMultiBasesThread(LPVOID arg);
 #endif
 
+int clusterSize(Pos *feat00, Pos *feat01, Pos *feat10, Pos *feat11);
+
 void usage() {
     fprintf(stderr, "USAGE:\n");
     fprintf(stderr, "  find_other_structures [OPTION]...\n");
@@ -77,7 +79,6 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
-int clusterSize(Pos *feat00, Pos *feat01, Pos *feat10, Pos *feat11);
 
 #ifdef USE_PTHREAD
 void *findMultiBasesThread(void *arg) {
@@ -137,17 +138,17 @@ DWORD WINAPI findMultiBasesThread(LPVOID arg) {
  * interest in this case
  */
 int clusterSize(Pos *feat00, Pos *feat01, Pos *feat10, Pos *feat11) {
-    // check if diagonal regions are in range
     int x1, z1, x2, z2;
     int diag = 0;
     float sqrad;
 
-    x1 = (feat11->x + 32) - feat00->x;
-    z1 = (feat11->z + 32) - feat00->z;
-    if(x*x + z*z <= 255) diag += 1;
-    x2 = (feat01->x + 32) - feat10->x;
-    z2 = (feat10->z + 32) - feat01->z;
-    if(x*x + z*z <= 255) diag += 2;
+    // check if diagonal regions are in range
+    dx1 = (feat11->x + 32) - feat00->x;
+    dz1 = (feat11->z + 32) - feat00->z;
+    if(dx1*dx1 + dz1*dz1 <= 255) diag |= 1;
+    dx2 = (feat01->x + 32) - feat10->x;
+    dz2 = (feat10->z + 32) - feat01->z;
+    if(dx2*dx2 + dz2*dz2 <= 255) diag |= 2;
 
     // check for quadhut
     if(diag == 3) {
@@ -165,13 +166,15 @@ int clusterSize(Pos *feat00, Pos *feat01, Pos *feat10, Pos *feat11) {
 	}
     }
 
-    // check for triple hut including first diagonal
+    // check for triple huts
+    // uses getEnclosingRadius, but replaces the excluded position with the
+    // midpoint of the two diagonal positions
     if(diag & 1) {
 	sqrad = getEnclosingRadius(
 	    feat00->x, feat00->z,
 	    feat11->x, feat11->z,
 	    feat01->x, feat01->z,
-	    31, 0,
+	    feat00->x + (dx1 / 2), feat11->z - (dz1 / 2),
 	    7+1, 7+43+1, 9+1,
 	    32, 128
 	);
@@ -182,7 +185,7 @@ int clusterSize(Pos *feat00, Pos *feat01, Pos *feat10, Pos *feat11) {
 	sqrad = getEnclosingRadius(
 	    feat00->x, feat00->z,
 	    feat11->x, feat11->z,
-	    0, 31,
+	    feat11->x - (dx1 / 2), feat00->z + (dz1 / 2),
 	    feat10->x, feat10->z,
 	    7+1, 7+43+1, 9+1,
 	    32, 128
@@ -191,11 +194,9 @@ int clusterSize(Pos *feat00, Pos *feat01, Pos *feat10, Pos *feat11) {
 	    return 3;
 	}
     }
-
-    //check for triple hut including second diagonal
     if(diag & 2) {
 	sqrad = getEnclosingRadius(
-	    31, 31,
+	    feat10->x + (dx2 / 2), feat01->z + (dz2 / 2),
 	    feat11->x, feat11->z,
 	    feat01->x, feat01->z,
 	    feat10->x, feat10->z,
@@ -208,7 +209,7 @@ int clusterSize(Pos *feat00, Pos *feat01, Pos *feat10, Pos *feat11) {
 
 	sqrad = getEnclosingRadius(
 	    feat00->x, feat00->z,
-	    0, 0,
+	    feat01->x - (dx2 / 2), feat10->z - (dz2 / 2),
 	    feat01->x, feat01->z,
 	    feat10->x, feat10->z,
 	    7+1, 7+43+1, 9+1,
