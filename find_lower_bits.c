@@ -4,13 +4,13 @@
 #include <string.h>
 #include "finders.h"
 
-/* finds lower 20 bits of seeds that can potentially yield quad bases
+/* Finds lower 20 bits of seeds that can potentially yield quad bases.
  * 
- * IMPORTANT: these base seeds need the salt of the structure in question
- * subtracted from them in order to be usable
+ * IMPORTANT: These base seeds need the salt of the structure in question
+ * subtracted from them in order to be usable.
  *
- * uses property of nextInt(24) that its value mod 8 depends only on the
- * bottommost 20 bits of the seed
+ * Uses property of nextInt(24) that its value mod 8 depends only on the
+ * bottommost 20 bits of the seed.
  */
 int main(int argc, char *argv[]) {
     int range = (argc > 1) ? atoi(argv[1]) : 3;

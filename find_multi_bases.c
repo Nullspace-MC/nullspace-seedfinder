@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "finders.h"
+#include "nullspace_finders.h"
 
 #define DEFAULT_RANGE 64
 #define DEFAULT_NUM_THREADS 1
@@ -20,8 +21,6 @@ void *findMultiBasesThread(void *arg);
 DWORD WINAPI findMultiBasesThread(LPVOID arg);
 #endif
 
-int clusterSize(Pos *feat00, Pos *feat01, Pos *feat10, Pos *feat11);
-
 void usage() {
     fprintf(stderr, "USAGE:\n");
     fprintf(stderr, "  find_other_structures [OPTION]...\n");
@@ -34,8 +33,8 @@ void usage() {
     fprintf(stderr, "        (Defaults to %d)\n", DEFAULT_NUM_THREADS);
 }
 
-/* searches a list of 48 bit base seeds for additional triple huts, quad
- * huts and double monuments in the given range around (0,0)
+/* Searches a list of 48 bit base seeds for additional triple huts, quad
+ * huts and double monuments in the given range around (0,0).
  */
 int main(int argc, char *argv[]) {
     int range = DEFAULT_RANGE;
@@ -167,8 +166,8 @@ int clusterSize(Pos *feat00, Pos *feat01, Pos *feat10, Pos *feat11) {
     }
 
     // check for triple huts
-    // uses getEnclosingRadius, but replaces the excluded position with the
-    // midpoint of the two diagonal positions
+    // uses getEnclosingRadius, but replaces the excluded position with
+    // the midpoint of the two diagonal positions
     if(diag & 1) {
 	sqrad = getEnclosingRadius(
 	    feat00->x, feat00->z,

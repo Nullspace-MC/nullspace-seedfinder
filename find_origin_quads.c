@@ -12,9 +12,9 @@ const int64_t lowerBits[] = {
 
 const char *baseSeedsPath = "./seeds/qh_bases.txt";
 
-/* finds lower 48 bits of seeds that can potentially yield quad bases
+/* Finds lower 48 bits of seeds that can potentially yield quad bases.
  *
- * saves results to "./seeds/qh_bases.txt"
+ * Saves results to "./seeds/qh_bases.txt"
  */
 int main(int argc, char *argv[]) {
     FILE *baseSeeds = fopen(baseSeedsPath, "w");
