@@ -37,6 +37,16 @@ find_origin_quads: find_origin_quads.o layers.o generator.o finders.o
 find_origin_quads.o: find_origin_quads.c
 	$(CC) -c $(CFLAGS) $<
 
+find_multi_bases: find_multi_bases.o layers.o generator.o finders.o nullspace_finders.o
+	$(CC) -o $@ $^ $(LDFLAGS)
+
+find_multi_bases.o: find_multi_bases.c
+	$(CC) -c $(CFLAGS) $<
+
+
+nullspace_finders.o: nullspace_finders.c nullspace_finders.h
+	$(CC) -c $(CFLAGS) $<
+
 
 xmapview.o: xmapview.c xmapview.h
 	$(CC) -c $(CFLAGS) $<
@@ -54,5 +64,5 @@ util.o: util.c util.h
 	$(CC) -c $(CFLAGS) $<
 
 clean:
-	$(RM) *.o libcubiomes.a find_lower_bits find_origin_quads
+	$(RM) *.o libcubiomes.a find_lower_bits find_origin_quads find_multi_bases
 
