@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include "finders.h"
@@ -8,7 +9,7 @@
 #define DEFAULT_RANGE 64
 #define DEFAULT_NUM_THREADS 1
 
-struct threadinfo {
+struct ThreadInfo {
     int tid;
     int range;
     int64_t *seeds;
@@ -20,7 +21,7 @@ void *findMultiBasesThread(void *arg) {
 #else
 DWORD WINAPI findMultiBasesThread(LPVOID arg) {
 #endif
-    struct threadinfo *info = (struct threadinfo*)arg;
+    struct ThreadInfo *info = (struct ThreadInfo*)arg;
     int tid = info->tid;
     int range = info->range;
     int64_t *seeds = info->seeds;
