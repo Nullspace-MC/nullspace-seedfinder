@@ -27,55 +27,8 @@ DWORD WINAPI findMultiBasesThread(LPVOID arg) {
     int64_t *seeds = info->seeds;
     int64_t scnt = info->scnt;
 
-    int spos_dim = (2 * range) + 1;
-    Pos *spos_feat = malloc(sizeof(Pos) * spos_dim * spos_dim);
-    Pos *spos_mon = malloc(sizeof(Pos) * spos_dim * spos_dim);
-
     for(int64_t s = 0; s < scnt; ++s) {
-	int64_t seed = seeds[s];
-	int spos_idx;
-
-	char * seed_info = malloc(sizeof(char) * 128);
-	sprintf(seed_info, "%ld\n", seed);
-	
-	int qfcnt, tfcnt, tmcnt, dmcnt;
-	qfcnt = tfcnt = tmcnt = dmcnt = 0;
-
-	// find all structure positions
-	spos_idx = 0;
-	for(int x = -range; x <= range; ++x) {
-	    for(int z = -range; z <= range; ++z, ++spos_idx) {
-		spos_feat[spos_idx] = getFeatureChunkInRegion(
-		    FEATURE_CONFIG, seed, x, z
-		);
-		spos_mon[spos_idx] = getLargeStructureChunkInRegion(
-		    MONUMENT_CONFIG, seed, x, z
-		);
-	    }
-	}
-
-	// check for structure clusters
-	spos_idx = 0;
-	for(int x = -range; x < range; ++x, ++spos_idx) {
-	    for(int z = -range; z < range; ++z, ++spos_idx) {
-		int cluster_size = clusterSize(
-		    &spos_feat[spos_idx],
-		    &spos_feat[spos_idx + spos_dim],
-		    &spos_feat[spos_idx + 1],
-		    &spos_feat[spos_idx + spos_dim + 1],
-		    7+1, 7+43+1, 9+1, 3
-		);
-
-		if(cluser_size == 4) {
-
-		    ++qfcnt;
-		}
-	    }
-	}
     }
-
-    free(spos_feat);
-    free(spos_mon);
 
 #ifdef USE_PTHREAD
     pthread_exit(NULL);

@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include "finders.h"
 #include "nullspace_finders.h"
 
 /* Searches a given range in a given seed for notable structure clusters.
@@ -9,8 +10,70 @@
  * feature clusters are at (0,0) and call itself on the new seeds with
  * center_triples disabled.
  */
+// TODO: Figure out how to add triple_centered seeds in the output.
 void findClustersInRange(int64_t seed, int range, bool center_triples,
 	ClusterCount *ccnt) {
+    const int spos_dim = (2 * range) + 1;
+    Pos *spos_feat = malloc(sizeof(Pos) * spos_dim * spos_dim);
+    Pos *spos_mon = malloc(sizeof(Pos) * spos_dim * spos_dim);
+
+    // find all structure chunk positions
+    int spos_idx = 0;
+    for(int x = -range; x <= range; ++x) {
+	for(int z = -range; z <= range; ++z, ++spos_idx) {
+	    spos_feat[spos_idx] = getFeatureChunkInRegion(
+		FEATURE_CONFIG, seed, x, z
+	    );
+	    spos_mon[spos_idx] = getLargeStructureChunkInRegion(
+		MONUMENT_CONFIG, seed, x, z
+	    );
+	}
+    }
+
+    // search for structure clusters
+    spos_idx = 0;
+    for(int x = -range; x < range; ++x, ++spos_idx) {
+	for(int x = -range; z < range; ++z, ++spos_idx) {
+	    int feat_cluster_size = clusterSize(
+		&spos_feat[spos_idx],
+		&spos_feat[spos_idx + spos_dim],
+		&spos_feat[spos_idx + 1],
+		&spos_feat[spos_idx + spos_dim + 1],
+		7+1, 7+43+1, 9+1, 3
+	    );
+	    if(feat_cluster_size == 4) {
+		++(ccnt->qfcnt);
+	    } else if(feat_cluster_size == 3) {
+		// search again with triple feature at (0,0)
+		if(center_triples && x != 0 && z != 0) {
+		    int64_t tseed = moveStructure(seed, -x, -z);
+		    findClustersInRange(tseed, range, false, ccnt);
+		} else {
+		    ++(ccnt->tfcnt);
+		}
+	    } else if(feat_cluster_size == 2) {
+		++(ccnt->dfcnt);
+	    }
+
+	    int mon_cluster_size = clusterSize(
+		&spos_mon[spos_idx],
+		&spos_mon[spos_idx + spos_dim],
+		&spos_mon[spos_idx + 1],
+		&spos_mon[spos_idx + spos_dim + 1],
+		58+1, /*TODO: replace with gaurdian farm height*/ 0, 58+1
+	    );
+	    if(mon_cluster_size == 4) {
+		++(ccnt->qmcnt);
+	    } else if(mon_cluster_size == 3) {
+		++(ccnt->tmcnt);
+	    } else if(mon_cluster_size == 2) {
+		++(ccnt->dmcnt);
+	    }
+	}
+    }
+
+    free(spos_feat);
+    free(spos_mon);
 }
 
 /* Returns the size of the feature cluster within 4 regions, given the
