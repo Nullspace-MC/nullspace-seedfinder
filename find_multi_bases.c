@@ -27,8 +27,60 @@ DWORD WINAPI findMultiBasesThread(LPVOID arg) {
     int64_t *seeds = info->seeds;
     int64_t scnt = info->scnt;
 
+    const int spos_dim = (2 * range) + 1;
+    Pos *spos_feat = malloc(sizeof(Pos) * spos_dim * spos_dim);
+    Pos *spos_mon = malloc(sizeof(Pos) * spos_dim * spos_dim);
+
     for(int64_t s = 0; s < scnt; ++s) {
+	int64_t seed = seeds[s];
+
+	// find all structure chunk positions
+	int spos_idx = 0;
+	for(int x = -range; x <= range; ++x) {
+	    for(int z = -range; z <= range; ++z, ++spos_idx) {
+		spos_feat[spos_idx] = getFeatureChunkInRegion(
+		    FEATURE_CONFIG, seed, x, z
+		);
+		spos_mon[spos_idx] = getLargeStructureChunkInRegion(
+		    MONUMENT_CONFIG, seed, x, z
+		);
+	    }
+	}
+
+	// search for structure clusters
+	int fcnt, mcnt;
+	spos_idx = 0;
+	for(int x = -range; x < range; ++x, ++spos_idx) {
+	    for(int x = -range; z < range; ++z, ++spos_idx) {
+		int feat_cluster_size = clusterSize(
+		    &spos_feat[spos_idx],
+		    &spos_feat[spos_idx + spos_dim],
+		    &spos_feat[spos_idx + 1],
+		    &spos_feat[spos_idx + spos_dim + 1],
+		    7+1, 7+43+1, 9+1, 3
+		);
+		if(feat_cluster_size == 4) {
+		    ++fcnt;
+		} else if(feat_cluster_size == 3) {
+		    int64_t tseed = moveStructure(seed, -x, -z);
+		}
+
+		int mon_cluster_size = clusterSize(
+		    &spos_mon[spos_idx],
+		    &spos_mon[spos_idx + spos_dim],
+		    &spos_mon[spos_idx + 1],
+		    &spos_mon[spos_idx + spos_dim + 1],
+		    58+1, /*TODO: replace with gaurdian farm height*/ 0, 58+1, 2
+		);
+		if(mon_cluster_size >= 2) {
+		    ++mcnt;
+		}
+	    }
+	}
     }
+
+    free(spos_feat);
+    free(spos_mon);
 
 #ifdef USE_PTHREAD
     pthread_exit(NULL);
