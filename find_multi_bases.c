@@ -13,7 +13,7 @@ struct ThreadInfo {
     int tid;
     int range;
     int64_t *seeds;
-    int64_t *scnt;
+    int64_t scnt;
 };
 
 #ifdef USE_PTHREAD
