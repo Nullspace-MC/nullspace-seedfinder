@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include <stdint.h>
-#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include "finders.h"
@@ -14,7 +13,42 @@ typedef struct {
     int range;
     int64_t *seeds;
     int64_t scnt;
+    FILE *out;
 } thread_info;
+
+#ifdef USE_PTHREAD
+pthread_mutex_t ioMutex;
+#else
+HANDLE ioMutex;
+#endif
+
+void writeSeed(int tid, int64_t seed, FILE *out,
+	Pos *flist, Pos *mlist, int fcnt, int mcnt) {
+#ifdef USE_PTHREAD
+    pthread_mutex_lock(&ioMutex);
+#else
+    WaitForSingleObject(ioMutex, INFINITE);
+#endif
+    
+    printf("Thread %d: %ld", tid, seed);
+    fprintf(out, "%ld", seed);
+    for(int p = 0; p < fcnt; ++p) {
+	printf(" qf(%d,%d)", flist[p].x, flist[p].z);
+	fprintf(out, " qf(%d,%d)", flist[p].x, flist[p].z);
+    }
+    for(int p = 0; p < mcnt; ++p) {
+	printf(" dm(%d,%d)", mlist[p].x, mlist[p].z);
+	fprintf(out, " dm(%d,%d)", mlist[p].x, mlist[p].z);
+    }
+    printf("\n");
+    fprintf(out, "\n");
+
+#ifdef USE_PTHREAD
+    pthread_mutex_unlock(&ioMutex);
+#else
+    ReleaseMutex(ioMutex);
+#endif
+}
 
 #ifdef USE_PTHREAD
 void *findMultiBasesThread(void *arg) {
@@ -26,6 +60,7 @@ DWORD WINAPI findMultiBasesThread(LPVOID arg) {
     int range = info->range;
     int64_t *seeds = info->seeds;
     int64_t scnt = info->scnt;
+    FILE *out = info->out;
 
     const int spos_dim = (2 * range) + 1;
     Pos *spos_feat = malloc(sizeof(Pos) * spos_dim * spos_dim);
@@ -47,11 +82,17 @@ DWORD WINAPI findMultiBasesThread(LPVOID arg) {
 	    }
 	}
 
+	int fcnt = 0;
+	int mcnt = 0;
+	int flist_size = 256;
+	int mlist_size = 256;
+	Pos *flist = malloc(sizeof(Pos) * flist_size);
+	Pos *mlist = malloc(sizeof(Pos) * mlist_size);
+
 	// search for structure clusters
-	int fcnt, mcnt;
 	spos_idx = 0;
 	for(int x = -range; x < range; ++x, ++spos_idx) {
-	    for(int x = -range; z < range; ++z, ++spos_idx) {
+	    for(int z = -range; z < range; ++z, ++spos_idx) {
 		int feat_cluster_size = clusterSize(
 		    &spos_feat[spos_idx],
 		    &spos_feat[spos_idx + spos_dim],
@@ -59,10 +100,13 @@ DWORD WINAPI findMultiBasesThread(LPVOID arg) {
 		    &spos_feat[spos_idx + spos_dim + 1],
 		    7+1, 7+43+1, 9+1, 3
 		);
-		if(feat_cluster_size == 4) {
+		if(feat_cluster_size >= 3) {
 		    ++fcnt;
-		} else if(feat_cluster_size == 3) {
-		    int64_t tseed = moveStructure(seed, -x, -z);
+		    if(fcnt >= flist_size) {
+			flist_size *= 2;
+			flist = realloc(flist, sizeof(Pos) * flist_size);
+		    }
+		    flist[fcnt - 1] = (Pos){x, z};
 		}
 
 		int mon_cluster_size = clusterSize(
@@ -70,13 +114,26 @@ DWORD WINAPI findMultiBasesThread(LPVOID arg) {
 		    &spos_mon[spos_idx + spos_dim],
 		    &spos_mon[spos_idx + 1],
 		    &spos_mon[spos_idx + spos_dim + 1],
-		    58+1, /*TODO: replace with gaurdian farm height*/ 0, 58+1, 2
+		    58+1, /*replace with gaurdian farm height*/ 0, 58+1, 2
 		);
 		if(mon_cluster_size >= 2) {
 		    ++mcnt;
+		    if(mcnt >= mlist_size) {
+			mlist_size *= 2;
+			mlist = realloc(mlist, sizeof(Pos) * mlist_size);
+		    }
+		    mlist[mcnt - 1] = (Pos){x, z};
 		}
 	    }
 	}
+
+	//if(fcnt >= 2 && mcnt >= 1) {
+	if(fcnt >= 2) {
+	    writeSeed(tid, seed, out, flist, mlist, fcnt, mcnt);
+	}
+
+	free(flist);
+	free(mlist);
     }
 
     free(spos_feat);
@@ -117,7 +174,7 @@ int main(int argc, char *argv[]) {
 	    base_list = argv[a] + 12;
 	} else if(!strncmp(argv[a], "--num_threads=", 14)) {
 	    num_threads = (int)strtoll(argv[a] + 14, &endptr, 0);
-	} else if(!strcmp(argv[a] "--help") || !strcmp(argv[a], "-h")) {
+	} else if(!strcmp(argv[a], "--help") || !strcmp(argv[a], "-h")) {
 	    usage();
 	    exit(0);
 	} else {
@@ -142,6 +199,18 @@ int main(int argc, char *argv[]) {
 	exit(1);
     }
 
+    FILE *out = fopen("./seeds/dqh_dm_bases.txt", "w");
+    if(out == NULL) {
+	fprintf(stderr, "Could not open output file\n");
+	exit(1);
+    }
+
+#ifdef USE_PTHREAD
+    pthread_mutex_init(&ioMutex, NULL);
+#else
+    ioMutex = CreateMutex(NULL, FALSE, NULL);
+#endif
+
     thread_id_t *threads = malloc(sizeof(thread_id_t) * num_threads);
     thread_info *info = malloc(sizeof(thread_info) * num_threads);
     for(int t = 0; t < num_threads; ++t) {
@@ -151,7 +220,7 @@ int main(int argc, char *argv[]) {
 	int64_t end = ((t + 1) * scnt) / num_threads;
 	info[t].seeds = &seeds[start];
 	info[t].scnt = end - start;
-
+	info[t].out = out;
     }
 
 #ifdef USE_PTHREAD
@@ -175,6 +244,7 @@ int main(int argc, char *argv[]) {
 
     free(threads);
     free(info);
+    fclose(out);
 
     return 0;
 }

@@ -5,20 +5,6 @@
 #include <stdint.h>
 #include "finders.h"
 
-typedef struct {
-    int qfcnt, tfcnt, dfcnt;
-    int qmcnt, tmcnt, dmcnt;
-} ClusterCount;
-
-/* Searches a given range in a given seed for notable structure clusters.
- *
- * If center_triples is enabled, will translate seeds such that triple
- * feature clusters are at (0,0) and call itself on the new seeds with
- * center_triples disabled.
- */
-void findClustersInRange(int64_t seed, int range, bool center_triples,
-	ClusterCount *ccnt);
-
 /* Returns the size of the feature cluster within 4 regions, given the
  * chunk position of the feature within each region.
  *
