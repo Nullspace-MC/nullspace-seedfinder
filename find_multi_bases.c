@@ -6,6 +6,7 @@
 #include "nullspace_finders.h"
 
 #define DEFAULT_RANGE 64
+#define DEFAULT_OUT_LIST "./seeds/multi_bases.txt"
 #define DEFAULT_NUM_THREADS 1
 
 typedef struct {
@@ -32,13 +33,13 @@ void writeSeed(int tid, int64_t seed, FILE *out,
     
     printf("Thread %d: %ld", tid, seed);
     fprintf(out, "%ld", seed);
-    for(int p = 0; p < fcnt; ++p) {
-	printf(" qf(%d,%d)", flist[p].x, flist[p].z);
-	fprintf(out, " qf(%d,%d)", flist[p].x, flist[p].z);
+    for(int i = 0; i < fcnt; ++i) {
+	printf(" f(%d,%d)", flist[i].x, flist[i].z);
+	fprintf(out, " f(%d,%d)", flist[i].x, flist[i].z);
     }
-    for(int p = 0; p < mcnt; ++p) {
-	printf(" dm(%d,%d)", mlist[p].x, mlist[p].z);
-	fprintf(out, " dm(%d,%d)", mlist[p].x, mlist[p].z);
+    for(int i = 0; i < mcnt; ++i) {
+	printf(" m(%d,%d)", mlist[i].x, mlist[i].z);
+	fprintf(out, " m(%d,%d)", mlist[i].x, mlist[i].z);
     }
     printf("\n");
     fprintf(out, "\n");
@@ -66,6 +67,13 @@ DWORD WINAPI findMultiBasesThread(LPVOID arg) {
     Pos *spos_feat = malloc(sizeof(Pos) * spos_dim * spos_dim);
     Pos *spos_mon = malloc(sizeof(Pos) * spos_dim * spos_dim);
 
+    int flist_size = 16;
+    int mlist_size = 16;
+    Pos *flist = malloc(sizeof(Pos) * flist_size);
+    Pos *mlist = malloc(sizeof(Pos) * mlist_size);
+    int fcnt = 0;
+    int mcnt = 0;
+
     for(int64_t s = 0; s < scnt; ++s) {
 	int64_t seed = seeds[s];
 
@@ -73,52 +81,46 @@ DWORD WINAPI findMultiBasesThread(LPVOID arg) {
 	int spos_idx = 0;
 	for(int x = -range; x <= range; ++x) {
 	    for(int z = -range; z <= range; ++z, ++spos_idx) {
-		spos_feat[spos_idx] = getFeatureChunkInRegion(
+		spos_feat[spos_idx] = getFeaturePos(
 		    FEATURE_CONFIG, seed, x, z
 		);
-		spos_mon[spos_idx] = getLargeStructureChunkInRegion(
+		spos_mon[spos_idx] = getLargeStructurePos(
 		    MONUMENT_CONFIG, seed, x, z
 		);
 	    }
 	}
 
-	int fcnt = 0;
-	int mcnt = 0;
-	int flist_size = 256;
-	int mlist_size = 256;
-	Pos *flist = malloc(sizeof(Pos) * flist_size);
-	Pos *mlist = malloc(sizeof(Pos) * mlist_size);
-
 	// search for structure clusters
 	spos_idx = 0;
 	for(int x = -range; x < range; ++x, ++spos_idx) {
 	    for(int z = -range; z < range; ++z, ++spos_idx) {
-		int feat_cluster_size = clusterSize(
-		    &spos_feat[spos_idx],
-		    &spos_feat[spos_idx + spos_dim],
-		    &spos_feat[spos_idx + 1],
-		    &spos_feat[spos_idx + spos_dim + 1],
-		    7+1, 7+43+1, 9+1, 3
+		int fcs_min = (x == 0 && z == 0) ? 3 : 4;
+		int fcs = getClusterSize(
+		    spos_feat[spos_idx],
+		    spos_feat[spos_idx + spos_dim],
+		    spos_feat[spos_idx + 1],
+		    spos_feat[spos_idx + spos_dim + 1],
+		    7+1, 7+43+1, 9+1, fcs_min
 		);
-		if(feat_cluster_size >= 3) {
+		if(fcs >= fcs_min) {
 		    ++fcnt;
-		    if(fcnt >= flist_size) {
+		    if(fcnt > flist_size) {
 			flist_size *= 2;
 			flist = realloc(flist, sizeof(Pos) * flist_size);
 		    }
 		    flist[fcnt - 1] = (Pos){x, z};
 		}
 
-		int mon_cluster_size = clusterSize(
-		    &spos_mon[spos_idx],
-		    &spos_mon[spos_idx + spos_dim],
-		    &spos_mon[spos_idx + 1],
-		    &spos_mon[spos_idx + spos_dim + 1],
-		    58+1, /*replace with gaurdian farm height*/ 0, 58+1, 2
+		int mcs = getClusterSize(
+		    spos_mon[spos_idx],
+		    spos_mon[spos_idx + spos_dim],
+		    spos_mon[spos_idx + 1],
+		    spos_mon[spos_idx + spos_dim + 1],
+		    58+1, 0 /*replace with guardian farm size*/, 58+2, 2
 		);
-		if(mon_cluster_size >= 2) {
+		if(mcs >= 2) {
 		    ++mcnt;
-		    if(mcnt >= mlist_size) {
+		    if(mcnt > mlist_size) {
 			mlist_size *= 2;
 			mlist = realloc(mlist, sizeof(Pos) * mlist_size);
 		    }
@@ -127,17 +129,18 @@ DWORD WINAPI findMultiBasesThread(LPVOID arg) {
 	    }
 	}
 
-	//if(fcnt >= 2 && mcnt >= 1) {
-	if(fcnt >= 2) {
+	if(fcnt >= 2 && mcnt >= 1) {
 	    writeSeed(tid, seed, out, flist, mlist, fcnt, mcnt);
 	}
 
-	free(flist);
-	free(mlist);
+	fcnt = 0;
+	mcnt = 0;
     }
 
     free(spos_feat);
     free(spos_mon);
+    free(flist);
+    free(mlist);
 
 #ifdef USE_PTHREAD
     pthread_exit(NULL);
@@ -147,22 +150,22 @@ DWORD WINAPI findMultiBasesThread(LPVOID arg) {
 
 void usage() {
     fprintf(stderr, "USAGE:\n");
-    fprintf(stderr, "  find_other_structures [OPTION]...\n");
+    fprintf(stderr, "  find_origin_triplets [OPTION]...\n");
     fprintf(stderr, "    --help    (-h)\n");
     fprintf(stderr, "    --range=<integer>\n");
     fprintf(stderr, "        (Defaults to %d regions)\n", DEFAULT_RANGE);
     fprintf(stderr, "    --base_list=<file path>\n");
     fprintf(stderr, "        (Required)\n");
+    fprintf(stderr, "    --out_list=<file path>\n");
+    fprintf(stderr, "        (Defaults to \"%s\"\n", DEFAULT_OUT_LIST);
     fprintf(stderr, "    --num_threads=<integer>\n");
     fprintf(stderr, "        (Defaults to %d)\n", DEFAULT_NUM_THREADS);
 }
 
-/* Searches a list of 48 bit base seeds for additional triple huts, quad
- * huts and double monuments in the given range around (0,0).
- */
 int main(int argc, char *argv[]) {
     int range = DEFAULT_RANGE;
     const char *base_list = NULL;
+    const char *out_list = DEFAULT_OUT_LIST;
     int num_threads = DEFAULT_NUM_THREADS;
 
     // parse arguments
@@ -172,6 +175,8 @@ int main(int argc, char *argv[]) {
 	    range = (int)strtoll(argv[a] + 7, &endptr, 0);
 	} else if(!strncmp(argv[a], "--base_list=", 12)) {
 	    base_list = argv[a] + 12;
+	} else if(!strncmp(argv[a], "--out_list=", 11)) {
+	    out_list = argv[a] + 11;
 	} else if(!strncmp(argv[a], "--num_threads=", 14)) {
 	    num_threads = (int)strtoll(argv[a] + 14, &endptr, 0);
 	} else if(!strcmp(argv[a], "--help") || !strcmp(argv[a], "-h")) {
@@ -199,9 +204,9 @@ int main(int argc, char *argv[]) {
 	exit(1);
     }
 
-    FILE *out = fopen("./seeds/dqh_dm_bases.txt", "w");
+    FILE *out = fopen(out_list, "w");
     if(out == NULL) {
-	fprintf(stderr, "Could not open output file\n");
+	fprintf(stderr, "Could not open \"%s\"\n", out_list);
 	exit(1);
     }
 
