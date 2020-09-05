@@ -72,7 +72,17 @@ DWORD WINAPI findMultiBasesThread(LPVOID arg) {
 	spos_idx = 0;
 	for(int x = -range; x < range; ++x, ++spos_idx) {
 	    for(int z = -range; z < range; ++z, ++spos_idx) {
-		
+		int cs = getClusterSize(
+		    spos[spos_idx],
+		    spos[spos_idx + spos_dim],
+		    spos[spos_idx + 1],
+		    spos[spos_idx + spos_dim + 1],
+		    7+1, 7+43+1, 9+1, 3
+		);
+		if(cs == 3) {
+		    int64_t tseed = moveStructure(seed, -x, -z);
+		    writeSeed(tid, tseed, out);
+		}
 	    }
 	}
     }

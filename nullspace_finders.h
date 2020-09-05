@@ -63,7 +63,7 @@ float getMinRadius2(Pos p0, Pos p1, int ax, int ay, int az);
  * check a large rectangle of regions, and those double features will
  * be caught when checking another overlapping set of 4 regions.
  */
-int clusterSize(Pos *feat00, Pos *feat01, Pos *feat10, Pos *feat11,
+int getClusterSize(Pos feat00, Pos feat01, Pos feat10, Pos feat11,
 	int ax, int ay, int az, int min);
 
 #endif
