@@ -33,7 +33,7 @@ float getMinRadius4(Pos p0, Pos p1, Pos p2, Pos p3,
  * Based off of getEnclosingRadius from cubiomes.
  */
 float getMinRadius3(Pos p0, Pos p1, Pos p2,
-	int ax, int ay, int az, int min);
+	int ax, int ay, int az, int max);
 
 /* Returns the minum radius enclosing 2 features.
  *
@@ -50,16 +50,14 @@ float getMinRadius2(Pos p0, Pos p1, int ax, int ay, int az);
 /* Returns the size of the feature cluster within 4 regions, given the
  * chunk position of the feature within each region.
  *
- * feat parameters represent the chunk coordinates of a feature relative
- * to the region that it is in. The two bits at the end of each parameter
- * name represent the relative x coordinate (right bit) and z coordinate
- * (left bit) of that region.
+ * feat parameters represent the block coordinates of a feature. The two
+ * bits at the end of each parameter name represent the relative x
+ * coordinate (right bit) and z coordinate (left bit) of that region.
  *
- * ax, ay, az are the dimensions of the feature. (Increase ay if you need
- * more height for a dropshaft.)
+ * ax, ay, az are the dimensions of the feature.
  *
  * min is the minimum cluster size to search for.
- * 
+ *
  * Double features across regions (01,11) or regions (10,11) are not
  * counted by this function, as this function is intended to be used to
  * check a large rectangle of regions, and those double features will
