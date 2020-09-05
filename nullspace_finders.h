@@ -5,6 +5,48 @@
 #include <stdint.h>
 #include "finders.h"
 
+/* Returns the minum radius enclosing 4 features.
+ *
+ * feat parameters are the positions of each feature. (in blocks) These
+ * parameters do not need to be in any particular order.
+ *
+ * ax, ay, az are the dimensions of the box around each feature that must
+ * fit inside the radius
+ *
+ * max is the maximum radius to start searching from.
+ *
+ * Based off of getEnclosingRadius from cubiomes.
+ */
+float getMinRadius4(Pos p0, Pos p1, Pos p2, Pos p3,
+	int ax, int ay, int az, int max);
+
+/* Returns the minum radius enclosing 3 features.
+ *
+ * feat parameters are the positions of each feature. (in blocks) These
+ * parameters do not need to be in any particular order.
+ *
+ * ax, ay, az are the dimensions of the box around each feature that must
+ * fit inside the radius
+ *
+ * max is the maximum radius to start searching from.
+ *
+ * Based off of getEnclosingRadius from cubiomes.
+ */
+float getMinRadius3(Pos p0, Pos p1, Pos p2,
+	int ax, int ay, int az, int min);
+
+/* Returns the minum radius enclosing 2 features.
+ *
+ * feat parameters are the positions of each feature. (in blocks) These
+ * parameters do not need to be in any particular order.
+ *
+ * ax, ay, az are the dimensions of the box around each feature that must
+ * fit inside the radius
+ *
+ * Based off of getEnclosingRadius from cubiomes.
+ */
+float getMinRadius2(Pos p0, Pos p1, int ax, int ay, int az);
+
 /* Returns the size of the feature cluster within 4 regions, given the
  * chunk position of the feature within each region.
  *

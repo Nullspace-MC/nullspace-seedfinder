@@ -1,8 +1,133 @@
 #include <stdint.h>
-#include <stdbool.h>
 #include <stdlib.h>
+#include <math.h>
 #include "finders.h"
 #include "nullspace_finders.h"
+
+/* Returns the minum radius enclosing 4 features.
+ *
+ * feat parameters are the positions of each feature. (in blocks) These
+ * parameters do not need to be in any particular order.
+ *
+ * ax, ay, az are the dimensions of the box around each feature that must
+ * fit inside the radius
+ *
+ * max is the maximum radius to start searching from.
+ *
+ * Based off of getEnclosingRadius from cubiomes.
+ */
+float getMinRadius4(Pos p0, Pos p1, Pos p2, Pos p3,
+	int ax, int ay, int az, int max) {
+    // find search bounding box
+    int xMin01, xMin23, xMax;
+    xMin01 = p0.x < p1.x ? p0.x : p1.x;
+    xMin23 = p2.x < p3.x ? p2.x : p3.x;
+    xMax = (xMin01 < xMin23 ? xMin01 : xMin23) + max;
+    
+    int zMin01, zMin23, zMax;
+    zMin01 = p0.z < p1.z ? p0.z : p1.z;
+    zMin23 = p2.z < p3.z ? p2.z : p3.z;
+    zMax = (zMin01 < zMin23 ? zMin01 : zMin23) + max;
+
+    int xMax01, xMax23, xMin;
+    xMax01 = p0.x > p1.x ? p0.x : p1.x;
+    xMax23 = p2.x > p3.x ? p2.x : p3.x;
+    xMin = (xMax01 > xMax23 ? xMax01 : xMax23) + ax - max;
+    
+    int zMax01, zMax23, zMin;
+    zMax01 = p0.z > p1.z ? p0.z : p1.z;
+    zMax23 = p2.z > p3.z ? p2.z : p3.z;
+    zMin = (zMax01 > zMax23 ? zMax01 : zMax23) + az - max;
+
+    int sqrad = 0x7fffffff;
+
+    // search for ideal center
+    int x, z;
+    for(x = xMin; x <= xMax; ++x) {
+	for(z = zMin; z <= zMax; ++z) {
+	    int sq = 0;
+	    int s;
+	    s = (x-p0.x)*(x-p0.x) + (z-p0.z)*(z-p0.z); if(s > sq) sq = s;
+	    s = (x-p1.x)*(x-p1.x) + (z-p1.z)*(z-p1.z); if(s > sq) sq = s;
+	    s = (x-p2.x)*(x-p2.x) + (z-p2.z)*(z-p2.z); if(s > sq) sq = s;
+	    s = (x-p3.x)*(x-p3.x) + (z-p3.z)*(z-p3.z); if(s > sq) sq = s;
+	    if(sq < sqrad) {
+		sqrad = sq;
+	    }
+	}
+    }
+
+    return sqrad < 0x7fffffff ? sqrtf(sqrad + ay*ay/4.0f) : 0xffff;
+}
+
+/* Returns the minum radius enclosing 3 features.
+ *
+ * feat parameters are the positions of each feature. (in blocks) These
+ * parameters do not need to be in any particular order.
+ *
+ * ax, ay, az are the dimensions of the box around each feature that must
+ * fit inside the radius
+ *
+ * max is the maximum radius to start searching from.
+ *
+ * Based off of getEnclosingRadius from cubiomes.
+ */
+float getMinRadius3(Pos p0, Pos p1, Pos p2,
+	int ax, int ay, int az, int min) {
+    // find search bounding box
+    int xMin01, xMax;
+    xMin01 = p0.x < p1.x ? p0.x : p1.x;
+    xMax = (xMin01 < p2.x ? xMin01 : p2.x) + max;
+
+    int zMin01, zMax;
+    zMin01 = p0.z < p1.z ? p0.z : p1.z;
+    zMax = (zMin01 < p2.z ? zMin01 : p2.z) + max;
+
+    int xMax01, xMin;
+    xMax01 = p0.x > p1.x ? p0.x : p1.x;
+    xMin = (xMax01 > p2.x ? xMax01 : p2.x) + ax - max;
+
+    int zMax01, zMin;
+    zMax01 = p0.z > p1.z ? p0.z : p1.z;
+    zMin = (zMax01 > p2.z ? zMax01 : p2.z) + az - max;
+
+    int sqrad = 0x7fffffff;
+
+    // search for ideal center
+    int x, z;
+    for(x = xMin; x <= xMax; ++x) {
+	for(z = zMin; z <= zMax; ++z) {
+	    int sq = 0;
+	    int s;
+	    s = (x-p0.x)*(x-p0.x) + (z-p0.z)*(z-p0.z); if(s > sq) sq = s;
+	    s = (x-p1.x)*(x-p1.x) + (z-p1.z)*(z-p1.z); if(s > sq) sq = s;
+	    s = (x-p2.x)*(x-p2.x) + (z-p2.z)*(z-p2.z); if(s > sq) sq = s;
+	    if(sq < sqrad) {
+		sqrad = sq;
+	    }
+	}
+    }
+
+    return sqrad < 0x7fffffff ? sqrtf(sqrad + ay*ay/4.0f) : 0xffff;
+}
+
+/* Returns the minum radius enclosing 2 features.
+ *
+ * feat parameters are the positions of each feature. (in blocks) These
+ * parameters do not need to be in any particular order.
+ *
+ * ax, ay, az are the dimensions of the box around each feature that must
+ * fit inside the radius
+ *
+ * Based off of getEnclosingRadius from cubiomes.
+ */
+float getMinRadius2(Pos p0, Pos p1, int ax, int ay, int az) {
+    int dx = abs(p1.x - p0.x) + ax;
+    int dz = abs(p1.z - p0.z) + az;
+
+    int sqd = dx*dx + ay*ay + dz*dz;
+    return sqrtf(sqd) / 2.0f;
+}
 
 /* Returns the size of the feature cluster within 4 regions, given the
  * chunk position of the feature within each region.
