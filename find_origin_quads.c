@@ -10,7 +10,7 @@ const int64_t lowerBits[] = {
     0x9371a, 0xa5a08, 0xb5e18, 0xc751a, 0xf520a
 };
 
-const char *baseSeedsPath = "./seeds/qh_bases.txt";
+const char *baseSeedsPath = "./seeds/qf_bases.txt";
 
 /* Finds lower 48 bits of seeds that can potentially yield quad bases.
  *

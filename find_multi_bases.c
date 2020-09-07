@@ -23,26 +23,15 @@ pthread_mutex_t ioMutex;
 HANDLE ioMutex;
 #endif
 
-void writeSeed(int tid, int64_t seed, FILE *out,
-	Pos *flist, Pos *mlist, int fcnt, int mcnt) {
+void writeSeed(int tid, int64_t seed, FILE *out) {
 #ifdef USE_PTHREAD
     pthread_mutex_lock(&ioMutex);
 #else
     WaitForSingleObject(ioMutex, INFINITE);
 #endif
     
-    printf("Thread %d: %ld", tid, seed);
-    fprintf(out, "%ld", seed);
-    for(int i = 0; i < fcnt; ++i) {
-	printf(" f(%d,%d)", flist[i].x, flist[i].z);
-	fprintf(out, " f(%d,%d)", flist[i].x, flist[i].z);
-    }
-    for(int i = 0; i < mcnt; ++i) {
-	printf(" m(%d,%d)", mlist[i].x, mlist[i].z);
-	fprintf(out, " m(%d,%d)", mlist[i].x, mlist[i].z);
-    }
-    printf("\n");
-    fprintf(out, "\n");
+    printf("Thread %d: %ld\n", tid, seed);
+    fprintf(out, "%ld\n", seed);
 
 #ifdef USE_PTHREAD
     pthread_mutex_unlock(&ioMutex);
@@ -64,15 +53,7 @@ DWORD WINAPI findMultiBasesThread(LPVOID arg) {
     FILE *out = info->out;
 
     const int spos_dim = (2 * range) + 1;
-    Pos *spos_feat = malloc(sizeof(Pos) * spos_dim * spos_dim);
-    Pos *spos_mon = malloc(sizeof(Pos) * spos_dim * spos_dim);
-
-    int flist_size = 16;
-    int mlist_size = 16;
-    Pos *flist = malloc(sizeof(Pos) * flist_size);
-    Pos *mlist = malloc(sizeof(Pos) * mlist_size);
-    int fcnt = 0;
-    int mcnt = 0;
+    Pos *spos = malloc(sizeof(Pos) * spos_dim * spos_dim);
 
     for(int64_t s = 0; s < scnt; ++s) {
 	int64_t seed = seeds[s];
@@ -81,11 +62,8 @@ DWORD WINAPI findMultiBasesThread(LPVOID arg) {
 	int spos_idx = 0;
 	for(int x = -range; x <= range; ++x) {
 	    for(int z = -range; z <= range; ++z, ++spos_idx) {
-		spos_feat[spos_idx] = getFeaturePos(
+		spos[spos_idx] = getFeaturePos(
 		    FEATURE_CONFIG, seed, x, z
-		);
-		spos_mon[spos_idx] = getLargeStructurePos(
-		    MONUMENT_CONFIG, seed, x, z
 		);
 	    }
 	}
@@ -94,53 +72,24 @@ DWORD WINAPI findMultiBasesThread(LPVOID arg) {
 	spos_idx = 0;
 	for(int x = -range; x < range; ++x, ++spos_idx) {
 	    for(int z = -range; z < range; ++z, ++spos_idx) {
-		int fcs_min = (x == 0 && z == 0) ? 3 : 4;
-		int fcs = getClusterSize(
-		    spos_feat[spos_idx],
-		    spos_feat[spos_idx + spos_dim],
-		    spos_feat[spos_idx + 1],
-		    spos_feat[spos_idx + spos_dim + 1],
-		    7+1, 7+43+1, 9+1, fcs_min
-		);
-		if(fcs >= fcs_min) {
-		    ++fcnt;
-		    if(fcnt > flist_size) {
-			flist_size *= 2;
-			flist = realloc(flist, sizeof(Pos) * flist_size);
-		    }
-		    flist[fcnt - 1] = (Pos){x, z};
-		}
+		if(x == 0 && z == 0) continue;
 
-		int mcs = getClusterSize(
-		    spos_mon[spos_idx],
-		    spos_mon[spos_idx + spos_dim],
-		    spos_mon[spos_idx + 1],
-		    spos_mon[spos_idx + spos_dim + 1],
-		    58+1, 0 /*replace with guardian farm size*/, 58+2, 2
+		int cs = getClusterSize(
+		    spos[spos_idx],
+		    spos[spos_idx + spos_dim],
+		    spos[spos_idx + 1],
+		    spos[spos_idx + spos_dim + 1],
+		    7+1, 7+43+1, 9+1, 3
 		);
-		if(mcs >= 2) {
-		    ++mcnt;
-		    if(mcnt > mlist_size) {
-			mlist_size *= 2;
-			mlist = realloc(mlist, sizeof(Pos) * mlist_size);
-		    }
-		    mlist[mcnt - 1] = (Pos){x, z};
+		if(cs >= 3) {
+		    int64_t tseed = moveStructure(seed, -x, -z);
+		    writeSeed(tid, tseed, out);
 		}
 	    }
 	}
-
-	if(fcnt >= 2 && mcnt >= 1) {
-	    writeSeed(tid, seed, out, flist, mlist, fcnt, mcnt);
-	}
-
-	fcnt = 0;
-	mcnt = 0;
     }
 
-    free(spos_feat);
-    free(spos_mon);
-    free(flist);
-    free(mlist);
+    free(spos);
 
 #ifdef USE_PTHREAD
     pthread_exit(NULL);
@@ -150,7 +99,7 @@ DWORD WINAPI findMultiBasesThread(LPVOID arg) {
 
 void usage() {
     fprintf(stderr, "USAGE:\n");
-    fprintf(stderr, "  find_origin_triplets [OPTION]...\n");
+    fprintf(stderr, "  find_multi_bases [OPTION]...\n");
     fprintf(stderr, "    --help    (-h)\n");
     fprintf(stderr, "    --range=<integer>\n");
     fprintf(stderr, "        (Defaults to %d regions)\n", DEFAULT_RANGE);
@@ -162,6 +111,10 @@ void usage() {
     fprintf(stderr, "        (Defaults to %d)\n", DEFAULT_NUM_THREADS);
 }
 
+/* Searches a list of 48 bit base seeds for additional triple features
+ * and quad features in the given range around (0,0) and outputs the
+ * seeds translated such that the triple features are at (0,0).
+ */
 int main(int argc, char *argv[]) {
     int range = DEFAULT_RANGE;
     const char *base_list = NULL;

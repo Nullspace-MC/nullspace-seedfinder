@@ -17,9 +17,9 @@ endif
 all: release
 
 debug: CFLAGS += -DDEBUG -O0 -ggdb3
-debug: libcubiomes find_lower_bits find_origin_quads find_origin_triplets find_multi_bases
+debug: libcubiomes find_lower_bits find_origin_quads find_multi_bases find_base_candidates
 release: CFLAGS += -O3 -march=native
-release: libcubiomes find_lower_bits find_origin_quads find_origin_triplets find_multi_bases
+release: libcubiomes find_lower_bits find_origin_quads find_multi_bases find_base_candidates
 
 libcubiomes: CFLAGS += -fPIC
 libcubiomes: layers.o generator.o finders.o util.o
@@ -37,16 +37,16 @@ find_origin_quads: find_origin_quads.o layers.o generator.o finders.o
 find_origin_quads.o: find_origin_quads.c
 	$(CC) -c $(CFLAGS) $<
 
-find_origin_triplets: find_origin_triplets.o layers.o generator.o finders.o nullspace_finders.o
-	$(CC) -o $@ $^ $(LDFLAGS)
-
-find_origin_triplets.o: find_origin_triplets.c
-	$(CC) -c $(CFLAGS) $<
-
 find_multi_bases: find_multi_bases.o layers.o generator.o finders.o nullspace_finders.o
 	$(CC) -o $@ $^ $(LDFLAGS)
 
 find_multi_bases.o: find_multi_bases.c
+	$(CC) -c $(CFLAGS) $<
+
+find_base_candidates: find_base_candidates.o layers.o generator.o finders.o nullspace_finders.o
+	$(CC) -o $@ $^ $(LDFLAGS)
+
+find_base_candidates.o: find_base_candidates.c
 	$(CC) -c $(CFLAGS) $<
 
 
@@ -70,5 +70,5 @@ util.o: util.c util.h
 	$(CC) -c $(CFLAGS) $<
 
 clean:
-	$(RM) *.o libcubiomes.a find_lower_bits find_origin_quads find_origin_triplets find_multi_bases
+	$(RM) *.o libcubiomes.a find_lower_bits find_origin_quads find_multi_bases find_base_candidates
 
