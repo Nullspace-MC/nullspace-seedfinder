@@ -157,7 +157,7 @@ void usage() {
     fprintf(stderr, "    --base_list=<file path>\n");
     fprintf(stderr, "        (Required)\n");
     fprintf(stderr, "    --out_list=<file path>\n");
-    fprintf(stderr, "        (Defaults to \"%s\"\n", DEFAULT_OUT_LIST);
+    fprintf(stderr, "        (Defaults to \"%s\")\n", DEFAULT_OUT_LIST);
     fprintf(stderr, "    --num_threads=<integer>\n");
     fprintf(stderr, "        (Defaults to %d)\n", DEFAULT_NUM_THREADS);
 }
