@@ -17,9 +17,9 @@ endif
 all: release
 
 debug: CFLAGS += -DDEBUG -O0 -ggdb3
-debug: libcubiomes find_lower_bits find_origin_quads find_multi_bases find_base_candidates
+debug: libcubiomes find_lower_bits find_origin_quads find_multi_bases find_multi_seeds
 release: CFLAGS += -O3 -march=native
-release: libcubiomes find_lower_bits find_origin_quads find_multi_bases find_base_candidates
+release: libcubiomes find_lower_bits find_origin_quads find_multi_bases find_multi_seeds
 
 libcubiomes: CFLAGS += -fPIC
 libcubiomes: layers.o generator.o finders.o util.o
@@ -43,10 +43,10 @@ find_multi_bases: find_multi_bases.o layers.o generator.o finders.o nullspace_fi
 find_multi_bases.o: find_multi_bases.c
 	$(CC) -c $(CFLAGS) $<
 
-find_base_candidates: find_base_candidates.o layers.o generator.o finders.o nullspace_finders.o
+find_multi_seeds: find_multi_seeds.o layers.o generator.o finders.o nullspace_finders.o
 	$(CC) -o $@ $^ $(LDFLAGS)
 
-find_base_candidates.o: find_base_candidates.c
+find_multi_seeds.o: find_multi_seeds.c
 	$(CC) -c $(CFLAGS) $<
 
 
@@ -70,5 +70,5 @@ util.o: util.c util.h
 	$(CC) -c $(CFLAGS) $<
 
 clean:
-	$(RM) *.o libcubiomes.a find_lower_bits find_origin_quads find_multi_bases find_base_candidates
+	$(RM) *.o libcubiomes.a find_lower_bits find_origin_quads find_multi_bases find_multi_seeds
 
