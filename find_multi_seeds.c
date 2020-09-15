@@ -5,8 +5,10 @@
 #include "finders.h"
 #include "nullspace_finders.h"
 
-#define DEFAULT_RANGE 64
-#define DEFAULT_OUT_LIST "./seeds/base_candidates.txt"
+#define DEFAULT_SEARCH_RANGE 64
+#define DEFAULT_SHIFT_RANGE 4
+#define DEFAULT_BEST_LIST "./seeds/final_seeds_best.csv"
+#define DEFAULT_GOOD_LIST "./seeds/final_seeds_good.csv"
 #define DEFAULT_NUM_THREADS 1
 
 typedef struct {
@@ -14,7 +16,8 @@ typedef struct {
     int range;
     int64_t *seeds;
     int64_t scnt;
-    FILE *out;
+    FILE *best_seeds;
+    FILE *best_seeds;
 } thread_info;
 
 #ifdef USE_PTHREAD
@@ -61,7 +64,8 @@ DWORD WINAPI findMultiBasesThread(LPVOID arg) {
     int range = info->range;
     int64_t *seeds = info->seeds;
     int64_t scnt = info->scnt;
-    FILE *out = info->out;
+    FILE *best_seeds = info->best_seeds;
+    FILE *good_seeds = info->good_seeds;
 
     const int spos_dim = (2 * range) + 1;
     Pos *spos_feat = malloc(sizeof(Pos) * spos_dim * spos_dim);
@@ -130,7 +134,7 @@ DWORD WINAPI findMultiBasesThread(LPVOID arg) {
 	}
 
 	if(fcnt >= 2 && mcnt >= 1) {
-	    writeSeed(tid, seed, out, flist, mlist, fcnt, mcnt);
+	    //writeSeed(tid, seed, out, flist, mlist, fcnt, mcnt);
 	}
 
 	fcnt = 0;
@@ -152,35 +156,46 @@ void usage() {
     fprintf(stderr, "USAGE:\n");
     fprintf(stderr, "  find_multi_seeds [OPTION]...\n");
     fprintf(stderr, "    --help    (-h)\n");
-    fprintf(stderr, "    --range=<integer>\n");
-    fprintf(stderr, "        (Defaults to %d regions)\n", DEFAULT_RANGE);
+    fprintf(stderr, "    --search_range=<integer>\n");
+    fprintf(stderr, "        (Defaults to %d regions)\n", DEFAULT_SEARCH_RANGE);
+    fprintf(stderr, "    --shift_range=<integer>\n");
+    fprintf(stderr, "        (Defaults to %d regions)\n", DEFAULT_SHIFT_RANGE);
     fprintf(stderr, "    --base_list=<file path>\n");
     fprintf(stderr, "        (Required)\n");
-    fprintf(stderr, "    --out_list=<file path>\n");
-    fprintf(stderr, "        (Defaults to \"%s\")\n", DEFAULT_OUT_LIST);
+    fprintf(stderr, "    --best_list=<file path>\n");
+    fprintf(stderr, "        (Defaults to \"%s\")\n", DEFAULT_BEST_LIST);
+    fprintf(stderr, "    --good_list=<file path>\n");
+    fprintf(stderr, "        (Defaults to \"%s\")\n", DEFAULT_GOOD_LIST);
     fprintf(stderr, "    --num_threads=<integer>\n");
     fprintf(stderr, "        (Defaults to %d)\n", DEFAULT_NUM_THREADS);
 }
 
-/* Searches a list of 48 bit base seeds for quad features, triple features
- * and double monuments in the given range around (0,0) and outputs the
- * seeds along with information on the locations of the structures.
+/* Searches a list of 48 bit base seeds for full seeds with quad
+ * features, triple features and double monuments in the given range
+ * around (0,0) and outputs the seeds along with information on the
+ * locations of the structures.
  */
 int main(int argc, char *argv[]) {
-    int range = DEFAULT_RANGE;
+    int search_range = DEFAULT_SEARCH_RANGE;
+    int shift_range = DEFAULT_SHIFT_RANGE;
     const char *base_list = NULL;
-    const char *out_list = DEFAULT_OUT_LIST;
+    const char *best_list = DEFAULT_BEST_LIST;
+    const char *good_list = DEFAULT_GOOD_LIST;
     int num_threads = DEFAULT_NUM_THREADS;
 
     // parse arguments
     char *endptr;
     for(int a = 1; a < argc; ++a) {
-	if(!strncmp(argv[a], "--range=", 7)) {
-	    range = (int)strtoll(argv[a] + 7, &endptr, 0);
+	if(!strncmp(argv[a], "--search_range=", 14)) {
+	    search_range = (int)strtoll(argv[a] + 14, &endptr, 0);
+	} else if(!strncmp(argv[a], "--shift_range=", 13)) {
+	    shift_range = (int)strtoll(argv[a] + 13, &endptr, 0);
 	} else if(!strncmp(argv[a], "--base_list=", 12)) {
 	    base_list = argv[a] + 12;
-	} else if(!strncmp(argv[a], "--out_list=", 11)) {
-	    out_list = argv[a] + 11;
+	} else if(!strncmp(argv[a], "--best_list=", 12)) {
+	    best_list = argv[a] + 12;
+	} else if(!strncmp(argv[a], "--good_list=", 12)) {
+	    good_list = argv[a] + 12;
 	} else if(!strncmp(argv[a], "--num_threads=", 14)) {
 	    num_threads = (int)strtoll(argv[a] + 14, &endptr, 0);
 	} else if(!strcmp(argv[a], "--help") || !strcmp(argv[a], "-h")) {
@@ -208,9 +223,15 @@ int main(int argc, char *argv[]) {
 	exit(1);
     }
 
-    FILE *out = fopen(out_list, "w");
-    if(out == NULL) {
-	fprintf(stderr, "Could not open \"%s\"\n", out_list);
+    FILE *best_seeds = fopen(best_list, "w");
+    if(best_seeds == NULL) {
+	fprintf(stderr, "Could not open \"%s\"\n", best_list);
+	exit(1);
+    }
+
+    FILE *good_seeds = fopen(good_list, "w");
+    if(good_seeds == NULL) {
+	fprintf(stderr, "Could not open \"%s\"\n", good_list);
 	exit(1);
     }
 
@@ -229,7 +250,8 @@ int main(int argc, char *argv[]) {
 	int64_t end = ((t + 1) * scnt) / num_threads;
 	info[t].seeds = &seeds[start];
 	info[t].scnt = end - start;
-	info[t].out = out;
+	info[t].best_seeds = best_seeds;
+	info[t].good_seeds = good_seeds;
     }
 
 #ifdef USE_PTHREAD
@@ -253,7 +275,8 @@ int main(int argc, char *argv[]) {
 
     free(threads);
     free(info);
-    fclose(out);
+    fclose(best_seeds);
+    fclose(good_seeds);
 
     return 0;
 }
