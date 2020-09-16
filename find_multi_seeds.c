@@ -17,7 +17,7 @@ typedef struct {
     int64_t *seeds;
     int64_t scnt;
     FILE *best_seeds;
-    FILE *best_seeds;
+    FILE *good_seeds;
 } thread_info;
 
 #ifdef USE_PTHREAD
@@ -26,26 +26,20 @@ pthread_mutex_t ioMutex;
 HANDLE ioMutex;
 #endif
 
-void writeSeed(int tid, int64_t seed, FILE *out,
-	Pos *flist, Pos *mlist, int fcnt, int mcnt) {
+void writeSeed(FILE *out, int tid, int64_t seed,
+	Pos hut_1_7, Pos hut_1_8, Pos mon, int qual) {
 #ifdef USE_PTHREAD
     pthread_mutex_lock(&ioMutex);
 #else
     WaitForSingleObject(ioMutex, INFINITE);
 #endif
     
-    printf("Thread %d: %ld", tid, seed);
-    fprintf(out, "%ld", seed);
-    for(int i = 0; i < fcnt; ++i) {
-	printf(" f(%d,%d)", flist[i].x, flist[i].z);
-	fprintf(out, " f(%d,%d)", flist[i].x, flist[i].z);
-    }
-    for(int i = 0; i < mcnt; ++i) {
-	printf(" m(%d,%d)", mlist[i].x, mlist[i].z);
-	fprintf(out, " m(%d,%d)", mlist[i].x, mlist[i].z);
-    }
-    printf("\n");
-    fprintf(out, "\n");
+    printf("Thread %d: %ld 1.7 Hut: (%d,%d)(%d) 1.8 Hut: (%d,%d) "
+	"Monument: (%d,%d)\n", tid, seed, hut_1_7.x, hut_1_7.z, qual,
+	hut_1_8.x, hut_1_8.z, mon.x, mon.z);
+
+    fprintf(out, "%ld,%d,%d,%d,%d,%d,%d\n", seed, hut_1_7.x, hut_1_7.z,
+	hut_1_8.x, hut_1_8.z, mon.x, mon.z);
 
 #ifdef USE_PTHREAD
     pthread_mutex_unlock(&ioMutex);
@@ -71,11 +65,10 @@ DWORD WINAPI findMultiBasesThread(LPVOID arg) {
     Pos *spos_feat = malloc(sizeof(Pos) * spos_dim * spos_dim);
     Pos *spos_mon = malloc(sizeof(Pos) * spos_dim * spos_dim);
 
-    int flist_size = 16;
+    Pos hut_1_7, hut_1_8;
+
     int mlist_size = 16;
-    Pos *flist = malloc(sizeof(Pos) * flist_size);
     Pos *mlist = malloc(sizeof(Pos) * mlist_size);
-    int fcnt = 0;
     int mcnt = 0;
 
     for(int64_t s = 0; s < scnt; ++s) {
@@ -143,7 +136,6 @@ DWORD WINAPI findMultiBasesThread(LPVOID arg) {
 
     free(spos_feat);
     free(spos_mon);
-    free(flist);
     free(mlist);
 
 #ifdef USE_PTHREAD
@@ -228,12 +220,16 @@ int main(int argc, char *argv[]) {
 	fprintf(stderr, "Could not open \"%s\"\n", best_list);
 	exit(1);
     }
+    fprintf(best_seeds, "world seed,1.7 hut x,1.7 hut z,"
+	    "1.8 hut x,1.8 hut z,monument x,monument z\n");
 
     FILE *good_seeds = fopen(good_list, "w");
     if(good_seeds == NULL) {
 	fprintf(stderr, "Could not open \"%s\"\n", good_list);
 	exit(1);
     }
+    fprintf(good_seeds, "world seed,1.7 hut x,1.7 hut z,"
+	    "1.8 hut x,1.8 hut z,monument x,monument z\n");
 
 #ifdef USE_PTHREAD
     pthread_mutex_init(&ioMutex, NULL);
