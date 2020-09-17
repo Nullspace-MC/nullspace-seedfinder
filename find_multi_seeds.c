@@ -5,15 +5,16 @@
 #include "finders.h"
 #include "nullspace_finders.h"
 
-#define DEFAULT_SEARCH_RANGE 64
-#define DEFAULT_SHIFT_RANGE 4
+#define DEFAULT_SEARCH 64
+#define DEFAULT_SHIFT 4
 #define DEFAULT_BEST_LIST "./seeds/final_seeds_best.csv"
 #define DEFAULT_GOOD_LIST "./seeds/final_seeds_good.csv"
 #define DEFAULT_NUM_THREADS 1
 
 typedef struct {
     int tid;
-    int range;
+    int search;
+    int shift;
     int64_t *seeds;
     int64_t scnt;
     FILE *best_seeds;
@@ -55,17 +56,21 @@ DWORD WINAPI findMultiBasesThread(LPVOID arg) {
 #endif
     thread_info *info = (thread_info*)arg;
     int tid = info->tid;
-    int range = info->range;
+    int search = info->search;
+    int shift = info->shift;
     int64_t *seeds = info->seeds;
     int64_t scnt = info->scnt;
     FILE *best_seeds = info->best_seeds;
     FILE *good_seeds = info->good_seeds;
 
-    const int spos_dim = (2 * range) + 1;
+    const int spos_dim = (2 * search) + 1;
     Pos *spos_feat = malloc(sizeof(Pos) * spos_dim * spos_dim);
     Pos *spos_mon = malloc(sizeof(Pos) * spos_dim * spos_dim);
 
-    Pos hut_1_7, hut_1_8;
+    // The lowest 4 bits of hut_1_7_exclude indicate which hut triplets
+    // to check, as denoted by the hut excluded from each triplet.
+    int hut_1_7_exclude;
+    Pos hut_1_7[4], hut_1_8[4];
 
     int mlist_size = 16;
     Pos *mlist = malloc(sizeof(Pos) * mlist_size);
@@ -76,8 +81,8 @@ DWORD WINAPI findMultiBasesThread(LPVOID arg) {
 
 	// find all structure chunk positions
 	int spos_idx = 0;
-	for(int x = -range; x <= range; ++x) {
-	    for(int z = -range; z <= range; ++z, ++spos_idx) {
+	for(int x = -search; x <= search; ++x) {
+	    for(int z = -search; z <= search; ++z, ++spos_idx) {
 		spos_feat[spos_idx] = getFeaturePos(
 		    FEATURE_CONFIG, seed, x, z
 		);
@@ -88,24 +93,41 @@ DWORD WINAPI findMultiBasesThread(LPVOID arg) {
 	}
 
 	// search for structure clusters
+	hut_1_7_exclude = 0;
 	spos_idx = 0;
-	for(int x = -range; x < range; ++x, ++spos_idx) {
-	    for(int z = -range; z < range; ++z, ++spos_idx) {
-		int fcs_min = (x == 0 && z == 0) ? 3 : 4;
-		int fcs = getClusterSize(
+	for(int x = -search; x < search; ++x, ++spos_idx) {
+	    for(int z = -search; z < search; ++z, ++spos_idx) {
+		float r = getMinRadius4(
 		    spos_feat[spos_idx],
 		    spos_feat[spos_idx + spos_dim],
 		    spos_feat[spos_idx + 1],
 		    spos_feat[spos_idx + spos_dim + 1],
-		    7+1, 7+43+1, 9+1, fcs_min
+		    7+1, 7+43+1, 9+1, 128
 		);
-		if(fcs >= fcs_min) {
-		    ++fcnt;
-		    if(fcnt > flist_size) {
-			flist_size *= 2;
-			flist = realloc(flist, sizeof(Pos) * flist_size);
+		if(x == 0 && z == 0) {
+		    hut_1_7[0] = spos_feat[spos_idx];
+		    hut_1_7[1] = spos_feat[spos_idx + spos_dim];
+		    hut_1_7[2] = spos_feat[spos_idx + 1];
+		    hut_1_7[3] = spos_feat[spos_idx + spos_dim + 1];
+		    if(r > 128) {
+			// determine which triple huts to check
+			for(int o = 0; o < 4; ++o) {
+			    r = getMinRadius3(
+				hut_1_7[(0 + o) % 4],
+				hut_1_7[(1 + o) % 4],
+				hut_1_7[(2 + o) % 4],
+				7+1, 7+43+1, 9+1, 128
+			    );
+			    if(r <= 128) {
+				hut_1_7_exclude |= 1<<o;
+			    }
+			}
 		    }
-		    flist[fcnt - 1] = (Pos){x, z};
+		} else if(r <= 128) {
+		    hut_1_8[0] = spos_feat[spos_idx];
+		    hut_1_8[1] = spos_feat[spos_idx + spos_dim];
+		    hut_1_8[2] = spos_feat[spos_idx + 1];
+		    hut_1_8[3] = spos_feat[spos_idx + spos_dim + 1];
 		}
 
 		int mcs = getClusterSize(
@@ -148,10 +170,10 @@ void usage() {
     fprintf(stderr, "USAGE:\n");
     fprintf(stderr, "  find_multi_seeds [OPTION]...\n");
     fprintf(stderr, "    --help    (-h)\n");
-    fprintf(stderr, "    --search_range=<integer>\n");
-    fprintf(stderr, "        (Defaults to %d regions)\n", DEFAULT_SEARCH_RANGE);
-    fprintf(stderr, "    --shift_range=<integer>\n");
-    fprintf(stderr, "        (Defaults to %d regions)\n", DEFAULT_SHIFT_RANGE);
+    fprintf(stderr, "    --search=<integer>\n");
+    fprintf(stderr, "        (Defaults to %d regions)\n", DEFAULT_SEARCH);
+    fprintf(stderr, "    --shift=<integer>\n");
+    fprintf(stderr, "        (Defaults to %d regions)\n", DEFAULT_SHIFT);
     fprintf(stderr, "    --base_list=<file path>\n");
     fprintf(stderr, "        (Required)\n");
     fprintf(stderr, "    --best_list=<file path>\n");
@@ -168,8 +190,8 @@ void usage() {
  * locations of the structures.
  */
 int main(int argc, char *argv[]) {
-    int search_range = DEFAULT_SEARCH_RANGE;
-    int shift_range = DEFAULT_SHIFT_RANGE;
+    int search = DEFAULT_SEARCH;
+    int shift = DEFAULT_SHIFT;
     const char *base_list = NULL;
     const char *best_list = DEFAULT_BEST_LIST;
     const char *good_list = DEFAULT_GOOD_LIST;
@@ -178,10 +200,10 @@ int main(int argc, char *argv[]) {
     // parse arguments
     char *endptr;
     for(int a = 1; a < argc; ++a) {
-	if(!strncmp(argv[a], "--search_range=", 14)) {
-	    search_range = (int)strtoll(argv[a] + 14, &endptr, 0);
-	} else if(!strncmp(argv[a], "--shift_range=", 13)) {
-	    shift_range = (int)strtoll(argv[a] + 13, &endptr, 0);
+	if(!strncmp(argv[a], "--search=", 14)) {
+	    search = (int)strtoll(argv[a] + 14, &endptr, 0);
+	} else if(!strncmp(argv[a], "--shift=", 13)) {
+	    shift = (int)strtoll(argv[a] + 13, &endptr, 0);
 	} else if(!strncmp(argv[a], "--base_list=", 12)) {
 	    base_list = argv[a] + 12;
 	} else if(!strncmp(argv[a], "--best_list=", 12)) {
@@ -241,7 +263,8 @@ int main(int argc, char *argv[]) {
     thread_info *info = malloc(sizeof(thread_info) * num_threads);
     for(int t = 0; t < num_threads; ++t) {
 	info[t].tid = t;
-	info[t].range = range;
+	info[t].search = search;
+	info[t].shift = shift;
 	int64_t start = (t * scnt) / num_threads;
 	int64_t end = ((t + 1) * scnt) / num_threads;
 	info[t].seeds = &seeds[start];
