@@ -49,6 +49,76 @@ void writeSeed(FILE *out, int tid, int64_t seed,
 #endif
 }
 
+#define addIfMonCluster(A,B) do {				\
+    if(getMinRadius2(						\
+	spos_mon[A],						\
+	spos_mon[B],						\
+	58+1, 0 /*replace with guardian farm size*/, 58+2	\
+    ) <= 128) {							\
+	++(*moncnt);						\
+	if(*moncnt > mons_size) {				\
+	    mons_size *= 2;					\
+	    mon_0 = realloc(mon_0, sizeof(Pos) * mons_size);	\
+	    mon_1 = realloc(mon_1, sizeof(Pos) * mons_size);	\
+	}							\
+	mon_0[*moncnt - 1] = spos_mon[A];			\
+	mon_1[*moncnt - 1] = spos_mon[B];			\
+    }								\
+} while(0)
+
+void setStructurePositions(Pos *spos_feat, Pos *spos_mon, int search,
+	int *hut_1_7_exclude, Pos *hut_1_7, Pos *hut_1_8,
+	int mons_size, Pos *mon_0, Pos *mon_1, int *moncnt) {
+    const int spos_dim = (2 * search) + 1;
+    int spos_idx = 0;
+    for(int x = -search; x < search; ++x, ++spos_idx) {
+	for(int z = -search; z < search; ++z, ++spos_idx) {
+	    // get hut positions
+	    int cmin = (x == 0 && z == 0) ? 3 : 4;
+	    int csize = getClusterSize(
+		spos_feat[spos_idx],
+		spos_feat[spos_idx + spos_dim],
+		spos_feat[spos_idx + 1],
+		spos_feat[spos_idx + spos_dim + 1],
+		7+1, 7+43+1, 9+1, cmin
+	    );
+	    if(x == 0 && z == 0) {
+		*hut_1_7_exclude = 0xf;
+		hut_1_7[0] = spos_feat[spos_idx];
+		hut_1_7[1] = spos_feat[spos_idx + spos_dim];
+		hut_1_7[2] = spos_feat[spos_idx + 1];
+		hut_1_7[3] = spos_feat[spos_idx + spos_dim + 1];
+		if(csize == 3) {
+		    // determine which triple huts to check
+		    *hut_1_7_exclude = 0;
+		    for(int o = 0; o < 4; ++o) {
+			float r = getMinRadius3(
+			    hut_1_7[(0 + o) % 4],
+			    hut_1_7[(1 + o) % 4],
+			    hut_1_7[(2 + o) % 4],
+			    7+1, 7+43+1, 9+1, 128
+			);
+			if(r <= 128) {
+			    hut_1_7_exclude |= 1<<o;
+			}
+		    }
+		}
+	    } else if(csize == 4) {
+		hut_1_8[0] = spos_feat[spos_idx];
+		hut_1_8[1] = spos_feat[spos_idx + spos_dim];
+		hut_1_8[2] = spos_feat[spos_idx + 1];
+		hut_1_8[3] = spos_feat[spos_idx + spos_dim + 1];
+	    }
+	    
+	    // get monument positions
+	    addIfMonCluster(spos_idx, spos_idx + spos_dim + 1);
+	    addIfMonCluster(spos_idx + 1, spos_idx + spos_dim);
+	    addIfMonCluster(spos_idx, spos_idx + 1);
+	    addIfMonCluster(spos_idx, spos_idx + spos_dim);
+	}
+    }
+}
+
 #ifdef USE_PTHREAD
 void *findMultiBasesThread(void *arg) {
 #else
@@ -93,11 +163,11 @@ DWORD WINAPI findMultiBasesThread(LPVOID arg) {
 	}
 
 	// search for structure clusters
-	hut_1_7_exclude = 0;
+	hut_1_7_exclude;
 	spos_idx = 0;
 	for(int x = -search; x < search; ++x, ++spos_idx) {
 	    for(int z = -search; z < search; ++z, ++spos_idx) {
-		float r = getMinRadius4(
+		float r = getminradius4(
 		    spos_feat[spos_idx],
 		    spos_feat[spos_idx + spos_dim],
 		    spos_feat[spos_idx + 1],
@@ -112,7 +182,7 @@ DWORD WINAPI findMultiBasesThread(LPVOID arg) {
 		    if(r > 128) {
 			// determine which triple huts to check
 			for(int o = 0; o < 4; ++o) {
-			    r = getMinRadius3(
+			    r = getminradius3(
 				hut_1_7[(0 + o) % 4],
 				hut_1_7[(1 + o) % 4],
 				hut_1_7[(2 + o) % 4],
@@ -130,7 +200,7 @@ DWORD WINAPI findMultiBasesThread(LPVOID arg) {
 		    hut_1_8[3] = spos_feat[spos_idx + spos_dim + 1];
 		}
 
-		int mcs = getClusterSize(
+		int mcs = getclustersize(
 		    spos_mon[spos_idx],
 		    spos_mon[spos_idx + spos_dim],
 		    spos_mon[spos_idx + 1],
@@ -141,15 +211,15 @@ DWORD WINAPI findMultiBasesThread(LPVOID arg) {
 		    ++mcnt;
 		    if(mcnt > mlist_size) {
 			mlist_size *= 2;
-			mlist = realloc(mlist, sizeof(Pos) * mlist_size);
+			mlist = realloc(mlist, sizeof(pos) * mlist_size);
 		    }
-		    mlist[mcnt - 1] = (Pos){x, z};
+		    mlist[mcnt - 1] = (pos){x, z};
 		}
 	    }
 	}
 
 	if(fcnt >= 2 && mcnt >= 1) {
-	    //writeSeed(tid, seed, out, flist, mlist, fcnt, mcnt);
+	    //writeseed(tid, seed, out, flist, mlist, fcnt, mcnt);
 	}
 
 	fcnt = 0;
