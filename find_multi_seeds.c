@@ -56,21 +56,36 @@ void writeSeed(FILE *out, int tid, int64_t seed,
 	58+1, 0 /*replace with guardian farm size*/, 58+2	\
     ) <= 128) {							\
 	++(*moncnt);						\
-	if(*moncnt > mons_size) {				\
-	    mons_size *= 2;					\
-	    mon_0 = realloc(mon_0, sizeof(Pos) * mons_size);	\
-	    mon_1 = realloc(mon_1, sizeof(Pos) * mons_size);	\
+	if(*moncnt > *mons_size) {				\
+	    *mons_size *= 2;					\
+	    *mon_0 = realloc(*mon_0, sizeof(Pos) * *mons_size);	\
+	    *mon_1 = realloc(*mon_1, sizeof(Pos) * *mons_size);	\
 	}							\
-	mon_0[*moncnt - 1] = spos_mon[A];			\
-	mon_1[*moncnt - 1] = spos_mon[B];			\
+	(*mon_0)[*moncnt - 1] = spos_mon[A];			\
+	(*mon_1)[*moncnt - 1] = spos_mon[B];			\
     }								\
 } while(0)
 
-void setStructurePositions(Pos *spos_feat, Pos *spos_mon, int search,
+void setStructurePositions(int64_t seed, int search,
 	int *hut_1_7_exclude, Pos *hut_1_7, Pos *hut_1_8,
-	int mons_size, Pos *mon_0, Pos *mon_1, int *moncnt) {
+	int *mons_size, Pos **mon_0, Pos **mon_1, int *moncnt) {
     const int spos_dim = (2 * search) + 1;
+    Pos *spos_feat = malloc(sizeof(Pos) * spos_dim * spos_dim);
+    Pos *spos_mon = malloc(sizeof(Pos) * spos_dim * spos_dim);
+
     int spos_idx = 0;
+    for(int x = -search; x <= search; ++x) {
+	for(int z = -search; z <= search; ++z, ++spos_idx) {
+	    spos_feat[spos_idx] = getFeaturePos(
+		FEATURE_CONFIG, seed, x, z
+	    );
+	    spos_mon[spos_idx] = getLargeStructurePos(
+		MONUMENT_CONFIG, seed, x, z
+	    );
+	}
+    }
+
+    spos_idx = 0;
     for(int x = -search; x < search; ++x, ++spos_idx) {
 	for(int z = -search; z < search; ++z, ++spos_idx) {
 	    // get hut positions
@@ -99,7 +114,7 @@ void setStructurePositions(Pos *spos_feat, Pos *spos_mon, int search,
 			    7+1, 7+43+1, 9+1, 128
 			);
 			if(r <= 128) {
-			    hut_1_7_exclude |= 1<<o;
+			    *hut_1_7_exclude |= 1<<o;
 			}
 		    }
 		}
@@ -117,6 +132,9 @@ void setStructurePositions(Pos *spos_feat, Pos *spos_mon, int search,
 	    addIfMonCluster(spos_idx, spos_idx + spos_dim);
 	}
     }
+
+    free(spos_feat);
+    free(spos_mon);
 }
 
 #ifdef USE_PTHREAD
@@ -133,102 +151,42 @@ DWORD WINAPI findMultiBasesThread(LPVOID arg) {
     FILE *best_seeds = info->best_seeds;
     FILE *good_seeds = info->good_seeds;
 
-    const int spos_dim = (2 * search) + 1;
-    Pos *spos_feat = malloc(sizeof(Pos) * spos_dim * spos_dim);
-    Pos *spos_mon = malloc(sizeof(Pos) * spos_dim * spos_dim);
-
     // The lowest 4 bits of hut_1_7_exclude indicate which hut triplets
     // to check, as denoted by the hut excluded from each triplet.
     int hut_1_7_exclude;
-    Pos hut_1_7[4], hut_1_8[4];
-
-    int mlist_size = 16;
-    Pos *mlist = malloc(sizeof(Pos) * mlist_size);
-    int mcnt = 0;
+    Pos *hut_1_7 = malloc(sizeof(Pos) * 4);
+    Pos *hut_1_8 = malloc(sizeof(Pos) * 4);
+    int mons_size = 16;
+    Pos *mon_0 = malloc(sizeof(Pos) * mons_size);
+    Pos *mon_1 = malloc(sizeof(Pos) * mons_size);
+    int moncnt;
 
     for(int64_t s = 0; s < scnt; ++s) {
 	int64_t seed = seeds[s];
 
-	// find all structure chunk positions
-	int spos_idx = 0;
-	for(int x = -search; x <= search; ++x) {
-	    for(int z = -search; z <= search; ++z, ++spos_idx) {
-		spos_feat[spos_idx] = getFeaturePos(
-		    FEATURE_CONFIG, seed, x, z
-		);
-		spos_mon[spos_idx] = getLargeStructurePos(
-		    MONUMENT_CONFIG, seed, x, z
-		);
-	    }
-	}
-
 	// search for structure clusters
-	hut_1_7_exclude;
-	spos_idx = 0;
-	for(int x = -search; x < search; ++x, ++spos_idx) {
-	    for(int z = -search; z < search; ++z, ++spos_idx) {
-		float r = getminradius4(
-		    spos_feat[spos_idx],
-		    spos_feat[spos_idx + spos_dim],
-		    spos_feat[spos_idx + 1],
-		    spos_feat[spos_idx + spos_dim + 1],
-		    7+1, 7+43+1, 9+1, 128
+	moncnt = 0;
+	setStructurePositions(seed, search,
+	    &hut_1_7_exclude, hut_1_7, hut_1_8,
+	    &mons_size, &mon_0, &mon_1, &moncnt
+	);
+	if(moncnt > 0) {
+	    if(hut_1_7_exclude == 0xf) {
+		writeSeed(best_seeds, tid, seed,
+		    hut_1_7[0], hut_1_8[0], mon_0[0], 4
 		);
-		if(x == 0 && z == 0) {
-		    hut_1_7[0] = spos_feat[spos_idx];
-		    hut_1_7[1] = spos_feat[spos_idx + spos_dim];
-		    hut_1_7[2] = spos_feat[spos_idx + 1];
-		    hut_1_7[3] = spos_feat[spos_idx + spos_dim + 1];
-		    if(r > 128) {
-			// determine which triple huts to check
-			for(int o = 0; o < 4; ++o) {
-			    r = getminradius3(
-				hut_1_7[(0 + o) % 4],
-				hut_1_7[(1 + o) % 4],
-				hut_1_7[(2 + o) % 4],
-				7+1, 7+43+1, 9+1, 128
-			    );
-			    if(r <= 128) {
-				hut_1_7_exclude |= 1<<o;
-			    }
-			}
-		    }
-		} else if(r <= 128) {
-		    hut_1_8[0] = spos_feat[spos_idx];
-		    hut_1_8[1] = spos_feat[spos_idx + spos_dim];
-		    hut_1_8[2] = spos_feat[spos_idx + 1];
-		    hut_1_8[3] = spos_feat[spos_idx + spos_dim + 1];
-		}
-
-		int mcs = getclustersize(
-		    spos_mon[spos_idx],
-		    spos_mon[spos_idx + spos_dim],
-		    spos_mon[spos_idx + 1],
-		    spos_mon[spos_idx + spos_dim + 1],
-		    58+1, 0 /*replace with guardian farm size*/, 58+2, 2
+	    } else {
+		writeSeed(good_seeds, tid, seed,
+		    hut_1_7[0], hut_1_8[0], mon_0[0], 3
 		);
-		if(mcs >= 2) {
-		    ++mcnt;
-		    if(mcnt > mlist_size) {
-			mlist_size *= 2;
-			mlist = realloc(mlist, sizeof(pos) * mlist_size);
-		    }
-		    mlist[mcnt - 1] = (pos){x, z};
-		}
 	    }
 	}
-
-	if(fcnt >= 2 && mcnt >= 1) {
-	    //writeseed(tid, seed, out, flist, mlist, fcnt, mcnt);
-	}
-
-	fcnt = 0;
-	mcnt = 0;
     }
 
-    free(spos_feat);
-    free(spos_mon);
-    free(mlist);
+    free(hut_1_7);
+    free(hut_1_8);
+    free(mon_0);
+    free(mon_1);
 
 #ifdef USE_PTHREAD
     pthread_exit(NULL);
@@ -270,9 +228,9 @@ int main(int argc, char *argv[]) {
     // parse arguments
     char *endptr;
     for(int a = 1; a < argc; ++a) {
-	if(!strncmp(argv[a], "--search=", 14)) {
+	if(!strncmp(argv[a], "--search=", 9)) {
 	    search = (int)strtoll(argv[a] + 14, &endptr, 0);
-	} else if(!strncmp(argv[a], "--shift=", 13)) {
+	} else if(!strncmp(argv[a], "--shift=", 8)) {
 	    shift = (int)strtoll(argv[a] + 13, &endptr, 0);
 	} else if(!strncmp(argv[a], "--base_list=", 12)) {
 	    base_list = argv[a] + 12;

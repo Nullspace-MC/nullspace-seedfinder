@@ -1,7 +1,6 @@
 #ifndef NULLSPACE_FINDERS_H_
 #define NULLSPACE_FINDERS_H_
 
-#include <stdbool.h>
 #include <stdint.h>
 #include "finders.h"
 

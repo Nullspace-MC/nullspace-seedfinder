@@ -25,7 +25,7 @@ libcubiomes: CFLAGS += -fPIC
 libcubiomes: layers.o generator.o finders.o util.o
 	$(AR) $(ARFLAGS) libcubiomes.a $^
 
-find_lower_bits: find_lower_bits.o layers.o generator.o finders.o 
+find_lower_bits: find_lower_bits.o layers.o generator.o finders.o
 	$(CC) -o $@ $^ $(LDFLAGS)
 
 find_lower_bits.o: find_lower_bits.c

@@ -79,7 +79,7 @@ DWORD WINAPI findMultiBasesThread(LPVOID arg) {
 		    spos[spos_idx + spos_dim],
 		    spos[spos_idx + 1],
 		    spos[spos_idx + spos_dim + 1],
-		    7+1, 7+43+1, 9+1, 3
+		    7+1, 5+43+1, 9+1, 3
 		);
 		if(cs >= 3) {
 		    int64_t tseed = moveStructure(seed, -x, -z);
@@ -124,8 +124,8 @@ int main(int argc, char *argv[]) {
     // parse arguments
     char *endptr;
     for(int a = 1; a < argc; ++a) {
-	if(!strncmp(argv[a], "--range=", 7)) {
-	    range = (int)strtoll(argv[a] + 7, &endptr, 0);
+	if(!strncmp(argv[a], "--range=", 8)) {
+	    range = (int)strtoll(argv[a] + 8, &endptr, 0);
 	} else if(!strncmp(argv[a], "--base_list=", 12)) {
 	    base_list = argv[a] + 12;
 	} else if(!strncmp(argv[a], "--out_list=", 11)) {

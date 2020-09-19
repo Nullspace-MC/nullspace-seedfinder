@@ -18,33 +18,49 @@
  */
 float getMinRadius4(Pos p0, Pos p1, Pos p2, Pos p3,
 	int ax, int ay, int az, int max) {
-    // find search bounding box
-    int xMin01, xMin23, xMax;
-    xMin01 = p0.x < p1.x ? p0.x : p1.x;
-    xMin23 = p2.x < p3.x ? p2.x : p3.x;
-    xMax = (xMin01 < xMin23 ? xMin01 : xMin23) + max;
-    
-    int zMin01, zMin23, zMax;
-    zMin01 = p0.z < p1.z ? p0.z : p1.z;
-    zMin23 = p2.z < p3.z ? p2.z : p3.z;
-    zMax = (zMin01 < zMin23 ? zMin01 : zMin23) + max;
+    // find outer rectangle
+    int *xMin;
+    xMin = p0.x < p1.x ? &(p0.x) : &(p1.x);
+    xMin = *xMin < p2.x ? xMin : &(p2.x);
+    xMin = *xMin < p3.x ? xMin : &(p3.x);
 
-    int xMax01, xMax23, xMin;
-    xMax01 = p0.x > p1.x ? p0.x : p1.x;
-    xMax23 = p2.x > p3.x ? p2.x : p3.x;
-    xMin = (xMax01 > xMax23 ? xMax01 : xMax23) + ax - max;
+    int *zMin;
+    zMin = p0.z < p1.z ? &(p0.z) : &(p1.z);
+    zMin = *zMin < p2.z ? zMin : &(p2.z);
+    zMin = *zMin < p3.z ? zMin : &(p3.z);
+
+    int *xMax, *x2Max;
+    x2Max = p0.x > p1.x ? &(p1.x) : &(p0.x);
+    xMax = p0.x > p1.x ? &(p0.x) : &(p1.x);
+    x2Max = *xMax > p2.x ? (*x2Max > p2.x ? x2Max : &(p2.x)) : xMax;
+    xMax = *xMax > p2.x ? xMax : &(p2.x);
+    x2Max = *xMax > p3.x ? (*x2Max > p3.x ? x2Max : &(p3.x)) : xMax;
+    xMax = *xMax > p3.x ? xMax : &(p3.x);
+    *xMax += ax;
+    *x2Max += ax;
     
-    int zMax01, zMax23, zMin;
-    zMax01 = p0.z > p1.z ? p0.z : p1.z;
-    zMax23 = p2.z > p3.z ? p2.z : p3.z;
-    zMin = (zMax01 > zMax23 ? zMax01 : zMax23) + az - max;
+    int *zMax, *z2Max;
+    z2Max = p0.z > p1.z ? &(p1.z) : &(p0.z);
+    zMax = p0.z > p1.z ? &(p0.z) : &(p1.z);
+    z2Max = *zMax > p2.z ? (*z2Max > p2.z ? z2Max : &(p2.z)) : zMax;
+    zMax = *zMax > p2.z ? zMax : &(p2.z);
+    z2Max = *zMax > p3.z ? (*z2Max > p3.z ? z2Max : &(p3.z)) : zMax;
+    zMax = *zMax > p3.z ? zMax : &(p3.z);
+    *zMax += az;
+    *z2Max += az;
+
+    // find inner rectangle
+    int xCenterMin = *xMax - max;
+    int xCenterMax = *xMin + max;
+    int zCenterMin = *zMax - max;
+    int zCenterMax = *zMin + max;
 
     int sqrad = 0x7fffffff;
 
     // search for ideal center
     int x, z;
-    for(x = xMin; x <= xMax; ++x) {
-	for(z = zMin; z <= zMax; ++z) {
+    for(x = xCenterMin; x <= xCenterMax; ++x) {
+	for(z = zCenterMin; z <= zCenterMax; ++z) {
 	    int sq = 0;
 	    int s;
 	    s = (x-p0.x)*(x-p0.x) + (z-p0.z)*(z-p0.z); if(s > sq) sq = s;
@@ -74,29 +90,42 @@ float getMinRadius4(Pos p0, Pos p1, Pos p2, Pos p3,
  */
 float getMinRadius3(Pos p0, Pos p1, Pos p2,
 	int ax, int ay, int az, int max) {
-    // find search bounding box
-    int xMin01, xMax;
-    xMin01 = p0.x < p1.x ? p0.x : p1.x;
-    xMax = (xMin01 < p2.x ? xMin01 : p2.x) + max;
+    // find outer rectangle
+    int *xMin;
+    xMin = p0.x < p1.x ? &(p0.x) : &(p1.x);
+    xMin = *xMin < p2.x ? xMin : &(p2.x);
 
-    int zMin01, zMax;
-    zMin01 = p0.z < p1.z ? p0.z : p1.z;
-    zMax = (zMin01 < p2.z ? zMin01 : p2.z) + max;
+    int *zMin;
+    zMin = p0.z < p1.z ? &(p0.z) : &(p1.z);
+    zMin = *zMin < p2.z ? zMin : &(p2.z);
 
-    int xMax01, xMin;
-    xMax01 = p0.x > p1.x ? p0.x : p1.x;
-    xMin = (xMax01 > p2.x ? xMax01 : p2.x) + ax - max;
+    int *xMid, *xMax;
+    xMid = p0.x > p1.x ? &(p1.x) : &(p0.x);
+    xMax = p0.x > p1.x ? &(p0.x) : &(p1.x);
+    xMid = *xMax > p2.x ? (*xMid > p2.x ? xMid : &(p2.x)) : xMax;
+    xMax = *xMax > p2.x ? xMax : &(p2.x);
+    *xMax += ax;
+    if(2 * (*xMid) > *xMax + *xMin) *xMid += ax;
 
-    int zMax01, zMin;
-    zMax01 = p0.z > p1.z ? p0.z : p1.z;
-    zMin = (zMax01 > p2.z ? zMax01 : p2.z) + az - max;
+    int *zMid, *zMax;
+    zMid = p0.z > p1.z ? &(p1.z) : &(p0.z);
+    zMax = p0.z > p1.z ? &(p0.z) : &(p1.z);
+    zMid = *zMax > p2.z ? (*zMid > p2.z ? zMid : &(p2.z)) : zMax;
+    zMax = *zMax > p2.z ? zMax : &(p2.z);
+    if(2 * (*zMid) > *zMax + *zMin) *zMid += az;
+
+    // find inner rectangle
+    int xCenterMin = *xMax - max;
+    int xCenterMax = *xMin + max;
+    int zCenterMin = *zMax - max;
+    int zCenterMax = *zMin + max;
 
     int sqrad = 0x7fffffff;
 
     // search for ideal center
     int x, z;
-    for(x = xMin; x <= xMax; ++x) {
-	for(z = zMin; z <= zMax; ++z) {
+    for(x = xCenterMin; x <= xCenterMax; ++x) {
+	for(z = zCenterMin; z <= zCenterMax; ++z) {
 	    int sq = 0;
 	    int s;
 	    s = (x-p0.x)*(x-p0.x) + (z-p0.z)*(z-p0.z); if(s > sq) sq = s;
