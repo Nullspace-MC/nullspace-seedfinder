@@ -3,12 +3,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include "finders.h"
+#include "generator.h"
+#include "layers.h"
 #include "nullspace_finders.h"
 
 #define DEFAULT_SEARCH 64
 #define DEFAULT_SHIFT 4
-#define DEFAULT_BEST_LIST "./seeds/final_seeds_best.csv"
-#define DEFAULT_GOOD_LIST "./seeds/final_seeds_good.csv"
+#define DEFAULT_OUT_LIST "./seeds/final_seeds.csv"
 #define DEFAULT_NUM_THREADS 1
 
 typedef struct {
@@ -17,8 +18,7 @@ typedef struct {
     int shift;
     int64_t *seeds;
     int64_t scnt;
-    FILE *best_seeds;
-    FILE *good_seeds;
+    FILE *out;
 } thread_info;
 
 #ifdef USE_PTHREAD
@@ -28,19 +28,20 @@ HANDLE ioMutex;
 #endif
 
 void writeSeed(FILE *out, int tid, int64_t seed,
-	Pos hut_1_7, Pos hut_1_8, Pos mon, int qual) {
+	int dx, int dz, Pos hut_1_7, Pos hut_1_8, Pos mon) {
 #ifdef USE_PTHREAD
     pthread_mutex_lock(&ioMutex);
 #else
     WaitForSingleObject(ioMutex, INFINITE);
 #endif
     
-    printf("Thread %d: %ld 1.7 Hut: (%d,%d)(%d) 1.8 Hut: (%d,%d) "
-	"Monument: (%d,%d)\n", tid, seed, hut_1_7.x, hut_1_7.z, qual,
-	hut_1_8.x, hut_1_8.z, mon.x, mon.z);
+    printf("Thread %d: %ld 1.7 Hut: (%d,%d) 1.8 Hut: (%d,%d) "
+	"Monument: (%d,%d)\n", tid, seed, hut_1_7.x + dx, hut_1_7.z + dz,
+	hut_1_8.x + dx, hut_1_8.z + dz, mon.x + dx, mon.z + dz);
 
-    fprintf(out, "%ld,%d,%d,%d,%d,%d,%d\n", seed, hut_1_7.x, hut_1_7.z,
-	hut_1_8.x, hut_1_8.z, mon.x, mon.z);
+    fprintf(out, "%ld,%d,%d,%d,%d,%d,%d\n", seed,
+	hut_1_7.x + dx, hut_1_7.z + dz, hut_1_8.x + dx, hut_1_8.z + dz,
+	mon.x + dx, mon.z + dz);
 
 #ifdef USE_PTHREAD
     pthread_mutex_unlock(&ioMutex);
@@ -90,14 +91,15 @@ void setStructurePositions(int64_t seed, int search,
 	for(int z = -search; z < search; ++z, ++spos_idx) {
 	    // get hut positions
 	    int cmin = (x == 0 && z == 0) ? 3 : 4;
+	    int ay = (x == 0 && z == 0) ? 5+43+1 : 7+43+1;
 	    int csize = getClusterSize(
 		spos_feat[spos_idx],
 		spos_feat[spos_idx + spos_dim],
 		spos_feat[spos_idx + 1],
 		spos_feat[spos_idx + spos_dim + 1],
-		7+1, 7+43+1, 9+1, cmin
+		7+1, ay, 9+1, cmin
 	    );
-	    if(x == 0 && z == 0) {
+	    if(x == 0 && z == 0 && csize >= 3) {
 		*hut_1_7_exclude = 0xf;
 		hut_1_7[0] = spos_feat[spos_idx];
 		hut_1_7[1] = spos_feat[spos_idx + spos_dim];
@@ -108,10 +110,10 @@ void setStructurePositions(int64_t seed, int search,
 		    *hut_1_7_exclude = 0;
 		    for(int o = 0; o < 4; ++o) {
 			float r = getMinRadius3(
-			    hut_1_7[(0 + o) % 4],
 			    hut_1_7[(1 + o) % 4],
 			    hut_1_7[(2 + o) % 4],
-			    7+1, 7+43+1, 9+1, 128
+			    hut_1_7[(3 + o) % 4],
+			    7+1, ay, 9+1, 128
 			);
 			if(r <= 128) {
 			    *hut_1_7_exclude |= 1<<o;
@@ -148,8 +150,17 @@ DWORD WINAPI findMultiBasesThread(LPVOID arg) {
     int shift = info->shift;
     int64_t *seeds = info->seeds;
     int64_t scnt = info->scnt;
-    FILE *best_seeds = info->best_seeds;
-    FILE *good_seeds = info->good_seeds;
+    FILE *out = info->out;
+
+    LayerStack g;
+    setupGenerator(&g, MC_1_7);
+    /*
+    Layer *lFilterBiome = &g.layers[L_BIOME_256];
+    int *biomeCache = allocCache(lFilterBiome, 3, 3);
+    int64_t lsBiome = g.layers[L_BIOME_256].layerSeed;
+    */
+
+    int64_t seed;
 
     // The lowest 4 bits of hut_1_7_exclude indicate which hut triplets
     // to check, as denoted by the hut excluded from each triplet.
@@ -162,23 +173,75 @@ DWORD WINAPI findMultiBasesThread(LPVOID arg) {
     int moncnt;
 
     for(int64_t s = 0; s < scnt; ++s) {
-	int64_t seed = seeds[s];
+	int64_t base = seeds[s];
 
 	// search for structure clusters
 	moncnt = 0;
-	setStructurePositions(seed, search,
+	setStructurePositions(base, search,
 	    &hut_1_7_exclude, hut_1_7, hut_1_8,
 	    &mons_size, &mon_0, &mon_1, &moncnt
 	);
-	if(moncnt > 0) {
-	    if(hut_1_7_exclude == 0xf) {
-		writeSeed(best_seeds, tid, seed,
-		    hut_1_7[0], hut_1_8[0], mon_0[0], 4
-		);
-	    } else {
-		writeSeed(good_seeds, tid, seed,
-		    hut_1_7[0], hut_1_8[0], mon_0[0], 3
-		);
+
+	if(moncnt == 0) continue;
+
+	for(int x = -shift; x <= shift; ++x) {
+	    for(int z = -shift; z <= shift; ++z) {
+		int64_t tbase = moveStructure(base, x, z);
+		int dx = x << 9;
+		int dz = z << 9;
+		
+		for(int64_t u = 0; u < 0x10000; ++u) {
+		    seed = tbase + (u << 48);
+
+		    if(!isViableStructurePos(Swamp_Hut, MC_1_7, &g, seed,
+			hut_1_8[0].x + dx, hut_1_8[0].z + dz)) continue;
+		    if(!isViableStructurePos(Swamp_Hut, MC_1_7, &g, seed,
+			hut_1_8[1].x + dx, hut_1_8[1].z + dz)) continue;
+		    if(!isViableStructurePos(Swamp_Hut, MC_1_7, &g, seed,
+			hut_1_8[2].x + dx, hut_1_8[2].z + dz)) continue;
+		    if(!isViableStructurePos(Swamp_Hut, MC_1_7, &g, seed,
+			hut_1_8[3].x + dx, hut_1_8[3].z + dz)) continue;
+
+		    int hut_1_7_success = 0;
+		    for(int o = 0; o < 4; ++o) {
+			if(!(hut_1_7_exclude & 1<<o)) continue;
+
+			if(o != 0 && !isViableStructurePos(Swamp_Hut,
+			    MC_1_7, &g, seed, hut_1_7[0].x + dx,
+			    hut_1_7[0].z +dz)) continue;
+			if(o != 1 && !isViableStructurePos(Swamp_Hut,
+			    MC_1_7, &g, seed, hut_1_7[1].x + dx,
+			    hut_1_7[1].z +dz)) continue;
+			if(o != 2 && !isViableStructurePos(Swamp_Hut,
+			    MC_1_7, &g, seed, hut_1_7[2].x + dx,
+			    hut_1_7[2].z +dz)) continue;
+			if(o != 3 && !isViableStructurePos(Swamp_Hut,
+			    MC_1_7, &g, seed, hut_1_7[3].x + dx,
+			    hut_1_7[3].z +dz)) continue;
+
+			hut_1_7_success = 1;
+		    }
+		    if(!hut_1_7_success) continue;
+
+		    int mon_success = 0;
+		    int mon = -1;
+		    for(int m = 0; m < moncnt; ++m) {
+			if(!isViableStructurePos(Monument, MC_1_7, &g,
+			    seed, mon_0[m].x + dx,
+			    mon_0[m].z + dz)) continue;
+			if(!isViableStructurePos(Monument, MC_1_7, &g,
+			    seed, mon_1[m].x + dx,
+			    mon_1[m].z + dz)) continue;
+
+			mon_success = 1;
+			mon = m;
+			break;
+		    }
+		    if(!mon_success) continue;
+
+		    writeSeed(out, tid, seed, dx, dz,
+			hut_1_7[0], hut_1_8[0], mon_0[mon]);
+		}
 	    }
 	}
     }
@@ -204,10 +267,8 @@ void usage() {
     fprintf(stderr, "        (Defaults to %d regions)\n", DEFAULT_SHIFT);
     fprintf(stderr, "    --base_list=<file path>\n");
     fprintf(stderr, "        (Required)\n");
-    fprintf(stderr, "    --best_list=<file path>\n");
-    fprintf(stderr, "        (Defaults to \"%s\")\n", DEFAULT_BEST_LIST);
-    fprintf(stderr, "    --good_list=<file path>\n");
-    fprintf(stderr, "        (Defaults to \"%s\")\n", DEFAULT_GOOD_LIST);
+    fprintf(stderr, "    --out_list=<file path>\n");
+    fprintf(stderr, "        (Defaults to \"%s\")\n", DEFAULT_OUT_LIST);
     fprintf(stderr, "    --num_threads=<integer>\n");
     fprintf(stderr, "        (Defaults to %d)\n", DEFAULT_NUM_THREADS);
 }
@@ -221,8 +282,7 @@ int main(int argc, char *argv[]) {
     int search = DEFAULT_SEARCH;
     int shift = DEFAULT_SHIFT;
     const char *base_list = NULL;
-    const char *best_list = DEFAULT_BEST_LIST;
-    const char *good_list = DEFAULT_GOOD_LIST;
+    const char *out_list = DEFAULT_OUT_LIST;
     int num_threads = DEFAULT_NUM_THREADS;
 
     // parse arguments
@@ -231,13 +291,11 @@ int main(int argc, char *argv[]) {
 	if(!strncmp(argv[a], "--search=", 9)) {
 	    search = (int)strtoll(argv[a] + 14, &endptr, 0);
 	} else if(!strncmp(argv[a], "--shift=", 8)) {
-	    shift = (int)strtoll(argv[a] + 13, &endptr, 0);
+	    shift = (int)strtoll(argv[a] + 8, &endptr, 0);
 	} else if(!strncmp(argv[a], "--base_list=", 12)) {
 	    base_list = argv[a] + 12;
-	} else if(!strncmp(argv[a], "--best_list=", 12)) {
-	    best_list = argv[a] + 12;
-	} else if(!strncmp(argv[a], "--good_list=", 12)) {
-	    good_list = argv[a] + 12;
+	} else if(!strncmp(argv[a], "--out_list=", 11)) {
+	    out_list = argv[a] + 11;
 	} else if(!strncmp(argv[a], "--num_threads=", 14)) {
 	    num_threads = (int)strtoll(argv[a] + 14, &endptr, 0);
 	} else if(!strcmp(argv[a], "--help") || !strcmp(argv[a], "-h")) {
@@ -265,21 +323,15 @@ int main(int argc, char *argv[]) {
 	exit(1);
     }
 
-    FILE *best_seeds = fopen(best_list, "w");
-    if(best_seeds == NULL) {
-	fprintf(stderr, "Could not open \"%s\"\n", best_list);
+    FILE *out = fopen(out_list, "w");
+    if(out == NULL) {
+	fprintf(stderr, "Could not open \"%s\"\n", out_list);
 	exit(1);
     }
-    fprintf(best_seeds, "world seed,1.7 hut x,1.7 hut z,"
+    fprintf(out, "world seed,1.7 hut x,1.7 hut z,"
 	    "1.8 hut x,1.8 hut z,monument x,monument z\n");
-
-    FILE *good_seeds = fopen(good_list, "w");
-    if(good_seeds == NULL) {
-	fprintf(stderr, "Could not open \"%s\"\n", good_list);
-	exit(1);
-    }
-    fprintf(good_seeds, "world seed,1.7 hut x,1.7 hut z,"
-	    "1.8 hut x,1.8 hut z,monument x,monument z\n");
+    
+    initBiomes();
 
 #ifdef USE_PTHREAD
     pthread_mutex_init(&ioMutex, NULL);
@@ -297,8 +349,7 @@ int main(int argc, char *argv[]) {
 	int64_t end = ((t + 1) * scnt) / num_threads;
 	info[t].seeds = &seeds[start];
 	info[t].scnt = end - start;
-	info[t].best_seeds = best_seeds;
-	info[t].good_seeds = good_seeds;
+	info[t].out = out;
     }
 
 #ifdef USE_PTHREAD
@@ -322,8 +373,7 @@ int main(int argc, char *argv[]) {
 
     free(threads);
     free(info);
-    fclose(best_seeds);
-    fclose(good_seeds);
+    fclose(out);
 
     return 0;
 }
