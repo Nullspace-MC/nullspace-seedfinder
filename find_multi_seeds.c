@@ -54,7 +54,7 @@ void writeSeed(FILE *out, int tid, int64_t seed,
     if(getMinRadius2(						\
 	spos_mon[A],						\
 	spos_mon[B],						\
-	58+1, 0 /*replace with guardian farm size*/, 58+2	\
+	58+1, 39, 58+1						\
     ) <= 128) {							\
 	++(*moncnt);						\
 	if(*moncnt > *mons_size) {				\
@@ -64,15 +64,24 @@ void writeSeed(FILE *out, int tid, int64_t seed,
 	}							\
 	(*mon_0)[*moncnt - 1] = spos_mon[A];			\
 	(*mon_1)[*moncnt - 1] = spos_mon[B];			\
+	ret &= 0x3;						\
     }								\
 } while(0)
 
-void setStructurePositions(int64_t seed, int search,
+/* Sets the positions for the 1.7 triple huts, 1.8 quad huts and double
+ * ocean monuments to those of the given seed. If the seed does not
+ * contain any one of those, the appropiate bit of the return value is
+ * set. (1s place for 1.7 triple huts, 2s place for 1.8 quad huts and 4s
+ * place for double ocean monuments) Will return 0 if all
+ * necessary clusters are located.
+ */
+int setStructurePositions(int64_t seed, int search,
 	int *hut_1_7_exclude, Pos *hut_1_7, Pos *hut_1_8,
 	int *mons_size, Pos **mon_0, Pos **mon_1, int *moncnt) {
     const int spos_dim = (2 * search) + 1;
     Pos *spos_feat = malloc(sizeof(Pos) * spos_dim * spos_dim);
     Pos *spos_mon = malloc(sizeof(Pos) * spos_dim * spos_dim);
+    int ret = 0x7;
 
     int spos_idx = 0;
     for(int x = -search; x <= search; ++x) {
@@ -120,11 +129,15 @@ void setStructurePositions(int64_t seed, int search,
 			}
 		    }
 		}
+
+		ret &= 0x6;
 	    } else if(csize == 4) {
 		hut_1_8[0] = spos_feat[spos_idx];
 		hut_1_8[1] = spos_feat[spos_idx + spos_dim];
 		hut_1_8[2] = spos_feat[spos_idx + 1];
 		hut_1_8[3] = spos_feat[spos_idx + spos_dim + 1];
+
+		ret &= 0x5;
 	    }
 	    
 	    // get monument positions
@@ -137,6 +150,8 @@ void setStructurePositions(int64_t seed, int search,
 
     free(spos_feat);
     free(spos_mon);
+
+    return ret;
 }
 
 #ifdef USE_PTHREAD
@@ -177,12 +192,10 @@ DWORD WINAPI findMultiBasesThread(LPVOID arg) {
 
 	// search for structure clusters
 	moncnt = 0;
-	setStructurePositions(base, search,
+	if(setStructurePositions(base, search,
 	    &hut_1_7_exclude, hut_1_7, hut_1_8,
 	    &mons_size, &mon_0, &mon_1, &moncnt
-	);
-
-	if(moncnt == 0) continue;
+	)) continue;
 
 	for(int x = -shift; x <= shift; ++x) {
 	    for(int z = -shift; z <= shift; ++z) {
@@ -289,7 +302,7 @@ int main(int argc, char *argv[]) {
     char *endptr;
     for(int a = 1; a < argc; ++a) {
 	if(!strncmp(argv[a], "--search=", 9)) {
-	    search = (int)strtoll(argv[a] + 14, &endptr, 0);
+	    search = (int)strtoll(argv[a] + 9, &endptr, 0);
 	} else if(!strncmp(argv[a], "--shift=", 8)) {
 	    shift = (int)strtoll(argv[a] + 8, &endptr, 0);
 	} else if(!strncmp(argv[a], "--base_list=", 12)) {
