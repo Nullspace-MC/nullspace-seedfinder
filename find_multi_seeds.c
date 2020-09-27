@@ -169,13 +169,9 @@ DWORD WINAPI findMultiBasesThread(LPVOID arg) {
 
     LayerStack g;
     setupGenerator(&g, MC_1_7);
-    /*
     Layer *lFilterBiome = &g.layers[L_BIOME_256];
     int *biomeCache = allocCache(lFilterBiome, 3, 3);
     int64_t lsBiome = g.layers[L_BIOME_256].layerSeed;
-    */
-
-    int64_t seed;
 
     // The lowest 4 bits of hut_1_7_exclude indicate which hut triplets
     // to check, as denoted by the hut excluded from each triplet.
@@ -204,7 +200,21 @@ DWORD WINAPI findMultiBasesThread(LPVOID arg) {
 		int dz = z << 9;
 		
 		for(int64_t u = 0; u < 0x10000; ++u) {
-		    seed = tbase + (u << 48);
+		    int64_t seed = tbase + (u << 48);
+
+		    int areaX, areaZ;
+		    int64_t ss, cs;
+		    ss = getStartSeed(seed, lsBiome);
+
+		    // verify 1.8 hut biomes
+		    areaX = ((hut_1_8[0].x + dx) >> 8) | 1;
+		    areaZ = ((hut_1_8[0].z + dz) >> 8) | 1;
+		    cs = getChunkSeed(ss, areaX+1, areaZ+1);
+		    if(mcFirstInt(cs, 6) != 5) continue;
+		    setWorldSeed(lFilterBiome, seed);
+		    genArea(lFilterBiome, biomeCache,
+			areaX+1, areaZ+1, 1, 1);
+		    if(biomeCache[0] != swamp) continue;
 
 		    if(!isViableStructurePos(Swamp_Hut, MC_1_7, &g, seed,
 			hut_1_8[0].x + dx, hut_1_8[0].z + dz)) continue;
@@ -214,6 +224,15 @@ DWORD WINAPI findMultiBasesThread(LPVOID arg) {
 			hut_1_8[2].x + dx, hut_1_8[2].z + dz)) continue;
 		    if(!isViableStructurePos(Swamp_Hut, MC_1_7, &g, seed,
 			hut_1_8[3].x + dx, hut_1_8[3].z + dz)) continue;
+
+		    // verify 1.7 hut biomes
+		    areaX = ((hut_1_7[0].x + dx) >> 8) | 1;
+		    areaZ = ((hut_1_7[0].z + dz) >> 8) | 1;
+		    cs = getChunkSeed(ss, areaX+1, areaZ+1);
+		    if(mcFirstInt(cs, 6) != 5) continue;
+		    genArea(lFilterBiome, biomeCache,
+			areaX+1, areaZ+1, 1, 1);
+		    if(biomeCache[0] != swamp) continue;
 
 		    int hut_1_7_success = 0;
 		    for(int o = 0; o < 4; ++o) {
@@ -233,6 +252,7 @@ DWORD WINAPI findMultiBasesThread(LPVOID arg) {
 			    hut_1_7[3].z +dz)) continue;
 
 			hut_1_7_success = 1;
+			break;
 		    }
 		    if(!hut_1_7_success) continue;
 
