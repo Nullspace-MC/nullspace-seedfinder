@@ -195,27 +195,54 @@ DWORD WINAPI findMultiBasesThread(LPVOID arg) {
 
 	for(int x = -shift; x <= shift; ++x) {
 	    for(int z = -shift; z <= shift; ++z) {
+		int64_t seed;
 		int64_t tbase = moveStructure(base, x, z);
 		int dx = x << 9;
 		int dz = z << 9;
 		
-		for(int64_t u = 0; u < 0x10000; ++u) {
-		    int64_t seed = tbase + (u << 48);
+		int areaX_1_8 = ((hut_1_8[0].x + dx) >> 8) | 1;
+		int areaZ_1_8 = ((hut_1_8[0].z + dz) >> 8) | 1;
+		int areaX_1_7 = ((hut_1_7[0].x + dx) >> 8) | 1;
+		int areaZ_1_7 = ((hut_1_7[0].z + dz) >> 8) | 1;
 
-		    int areaX, areaZ;
-		    int64_t ss, cs;
+		// check seed base for lush -> swamp conversion
+		int64_t ss, cs, i, j;
+		for(i = 0; i < 5; ++i) {
+		    seed = tbase + ((i+0x53) << 48);
 		    ss = getStartSeed(seed, lsBiome);
+		    cs = getChunkSeed(ss, areaX_1_8+1, areaZ_1_8+1);
+		    if(mcFirstInt(cs, 6) == 5) break;
+		}
+		if(i >= 5) continue;
+		for(j = 0; j < 5; ++j) {
+		    seed = tbase + ((j+0x53) << 48);
+		    ss = getStartSeed(seed, lsBiome);
+		    cs = getChunkSeed(ss, areaX_1_7+1, areaZ_1_7+1);
+		    if(mcFirstInt(cs, 6) == 5) break;
+		}
+		if(j >= 5) continue;
 
-		    // verify 1.8 hut biomes
-		    areaX = ((hut_1_8[0].x + dx) >> 8) | 1;
-		    areaZ = ((hut_1_8[0].z + dz) >> 8) | 1;
-		    cs = getChunkSeed(ss, areaX+1, areaZ+1);
+		// check upper 16 bits for correct biomes
+		for(int64_t u = 0; u < 0x10000; ++u) {
+		    seed = tbase + (u << 48);
+
+		    // 1.8 rough swamp check
+		    ss = getStartSeed(seed, lsBiome);
+		    cs = getChunkSeed(ss, areaX_1_8+1, areaZ_1_8+1);
 		    if(mcFirstInt(cs, 6) != 5) continue;
 		    setWorldSeed(lFilterBiome, seed);
 		    genArea(lFilterBiome, biomeCache,
-			areaX+1, areaZ+1, 1, 1);
+			areaX_1_8+1, areaZ_1_8+1, 1, 1);
 		    if(biomeCache[0] != swamp) continue;
 
+		    // 1.7 rough swamp check
+		    cs = getChunkSeed(ss, areaX_1_7+1, areaZ_1_7+1);
+		    if(mcFirstInt(cs, 6) != 5) continue;
+		    genArea(lFilterBiome, biomeCache,
+			areaX_1_7+1, areaZ_1_7+1, 1, 1);
+		    if(biomeCache[0] != swamp) continue;
+
+		    // verify 1.8 hut biomes
 		    if(!isViableStructurePos(Swamp_Hut, MC_1_7, &g, seed,
 			hut_1_8[0].x + dx, hut_1_8[0].z + dz)) continue;
 		    if(!isViableStructurePos(Swamp_Hut, MC_1_7, &g, seed,
@@ -226,14 +253,6 @@ DWORD WINAPI findMultiBasesThread(LPVOID arg) {
 			hut_1_8[3].x + dx, hut_1_8[3].z + dz)) continue;
 
 		    // verify 1.7 hut biomes
-		    areaX = ((hut_1_7[0].x + dx) >> 8) | 1;
-		    areaZ = ((hut_1_7[0].z + dz) >> 8) | 1;
-		    cs = getChunkSeed(ss, areaX+1, areaZ+1);
-		    if(mcFirstInt(cs, 6) != 5) continue;
-		    genArea(lFilterBiome, biomeCache,
-			areaX+1, areaZ+1, 1, 1);
-		    if(biomeCache[0] != swamp) continue;
-
 		    int hut_1_7_success = 0;
 		    for(int o = 0; o < 4; ++o) {
 			if(!(hut_1_7_exclude & 1<<o)) continue;
