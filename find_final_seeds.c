@@ -311,7 +311,7 @@ DWORD WINAPI findMultiBasesThread(LPVOID arg) {
 
 void usage() {
     fprintf(stderr, "USAGE:\n");
-    fprintf(stderr, "  find_multi_seeds [OPTION]...\n");
+    fprintf(stderr, "  find_final_seeds [OPTION]...\n");
     fprintf(stderr, "    --help    (-h)\n");
     fprintf(stderr, "    --search=<integer>\n");
     fprintf(stderr, "        (Defaults to %d regions)\n", DEFAULT_SEARCH);
