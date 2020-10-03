@@ -50,6 +50,7 @@ void writeSeed(FILE *out, int tid, int64_t seed,
 #endif
 }
 
+/* Macro for checking monument clusters */
 #define addIfMonCluster(A,B) do {				\
     if(getMinRadius2(						\
 	spos_mon[A],						\
@@ -83,6 +84,7 @@ int setStructurePositions(int64_t seed, int search,
     Pos *spos_mon = malloc(sizeof(Pos) * spos_dim * spos_dim);
     int ret = 0x7;
 
+    // get all structure positions
     int spos_idx = 0;
     for(int x = -search; x <= search; ++x) {
 	for(int z = -search; z <= search; ++z, ++spos_idx) {
@@ -275,6 +277,7 @@ DWORD WINAPI findMultiBasesThread(LPVOID arg) {
 		    }
 		    if(!hut_1_7_success) continue;
 
+		    // verify monument biomes
 		    int mon_success = 0;
 		    int mon = -1;
 		    for(int m = 0; m < moncnt; ++m) {
