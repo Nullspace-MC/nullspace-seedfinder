@@ -49,6 +49,12 @@ find_final_seeds: find_final_seeds.o layers.o generator.o finders.o nullspace_fi
 find_final_seeds.o: find_final_seeds.c
 	$(CC) -c $(CFLAGS) $<
 
+find_rare_biomes: find_rare_biomes.o layers.o generator.o finders.o 
+	$(CC) -o $@ $^ $(LDFLAGS)
+
+find_rare_biomes.o: find_rare_biomes.c
+	$(CC) -c $(CFLAGS) $<
+
 
 nullspace_finders.o: nullspace_finders.c nullspace_finders.h
 	$(CC) -c $(CFLAGS) $<
@@ -70,5 +76,5 @@ util.o: util.c util.h
 	$(CC) -c $(CFLAGS) $<
 
 clean:
-	$(RM) *.o libcubiomes.a find_lower_bits find_origin_quads find_multi_bases find_final_seeds
+	$(RM) *.o libcubiomes.a find_lower_bits find_origin_quads find_multi_bases find_final_seeds find_rare_biomes
 

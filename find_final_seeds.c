@@ -157,9 +157,9 @@ int setStructurePositions(int64_t seed, int search,
 }
 
 #ifdef USE_PTHREAD
-void *findMultiBasesThread(void *arg) {
+void *findFinalSeedsThread(void *arg) {
 #else
-DWORD WINAPI findMultiBasesThread(LPVOID arg) {
+DWORD WINAPI findFinalSeedsThread(LPVOID arg) {
 #endif
     thread_info *info = (thread_info*)arg;
     int tid = info->tid;
@@ -410,7 +410,7 @@ int main(int argc, char *argv[]) {
 #ifdef USE_PTHREAD
     for(int t = 0; t < num_threads; ++t) {
 	pthread_create(&threads[t], NULL,
-			findMultiBasesThread, (void*)&info[t]);
+			findFinalSeedsThread, (void*)&info[t]);
     }
 
     for(int t = 0; t < num_threads; ++t) {
@@ -419,7 +419,7 @@ int main(int argc, char *argv[]) {
 #else
     for(int t = 0; t < num_threads; ++t) {
 	threads[t] = CreateThread(NULL, 0,
-			findMultiBasesThread, (LPVOID)&info[t],
+			findFinalSeedsThread, (LPVOID)&info[t],
 			0, NULL);
     }
 
