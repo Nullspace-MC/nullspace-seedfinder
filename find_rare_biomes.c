@@ -1,4 +1,5 @@
 #include <stdio.h>
+
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -6,24 +7,17 @@
 #include "layers.h"
 
 #define DEFAULT_RANGE 2048
-#define DEFAULT_OUT_LIST "./seeds/best_seeds.csv"
+#define DEFAULT_OUT_LIST "./seeds/best_seeds.txt"
 #define DEFAULT_NUM_THREADS 1
 
-const int biomeList[] = {
-    mushroom_fields, badlands, ice_spikes, jungle
+const int biome_list[] = {
+    mushroom_fields, jungle, badlands, ice_spikes
 };
-
-typedef struct {
-    int64_t seed;
-    int hut_1_7_x, hut_1_7_z;
-    int hut_1_8_x, hut_1_8_z;
-    int mon_x, mon_z;
-} seed_info;
 
 typedef struct {
     int tid;
     int range;
-    seed_info *seeds;
+    int64_t *seeds;
     int64_t scnt;
     FILE *out;
 } thread_info;
@@ -34,17 +28,15 @@ pthread_mutex_t ioMutex;
 HANDLE ioMutex;
 #endif
 
-void writeSeed(FILE *out, int tid, seed_info si) {
+void writeSeed(FILE *out, int tid, int64_t seed) {
 #ifdef USE_PTHREAD
     pthread_mutex_lock(&ioMutex);
 #else
     WaitForSingleObject(ioMutex, INFINITE);
 #endif
 
-    printf("Thread %d: %ld\n", tid, si.seed);
-    fprintf(out, "%ld,%d,%d,%d,%d,%d,%d\n", si.seed,
-	si.hut_1_7_x, si.hut_1_7_z, si.hut_1_8_x, si.hut_1_8_z,
-	si.mon_x, si.mon_z);
+    printf("Thread %d: %ld\n", tid, seed);
+    fprintf(out, "%ld\n", seed);
 
 #ifdef USE_PTHREAD
     pthread_mutex_unlock(&ioMutex);
@@ -61,55 +53,51 @@ DWORD WINAPI findFinalSeedsThread(LPVOID arg) {
     thread_info *info = (thread_info*)arg;
     int tid = info->tid;
     int range = info->range;
-    seed_info *seeds = info->seeds;
+    int64_t *seeds = info->seeds;
     int64_t scnt = info->scnt;
     FILE *out = info->out;
 
+    range = range >> 4;
+    int ax = -range, az = -range;
+    int w = 2 * range, h = 2 * range;
+    int a = w * h;
+
+    LayerStack g;
+    setupGenerator(&g, MC_1_7);
+    int *cache = allocCache(&g.layers[L_SHORE_16], w, h);
+    BiomeFilter filter = setupBiomeFilter(biome_list, 4);
+
     for(int64_t s = 0; s < scnt; ++s) {
-	writeSeed(out, tid, seeds[s]);
+	if(!(checkForBiomes(&g, L_SHORE_16, cache, seeds[s],
+	    ax, az, w, h, filter, 1) > 0)) continue;
+
+	applySeed(&g, seeds[s]);
+	genArea(&g.layers[L_SHORE_16], cache, ax, az, w, h);
+
+	int mushroom_count = 0;
+	int jungle_count = 0;
+	int badlands_count = 0;
+	int ice_spikes_count = 0;
+	for(int i = 0; i < a; ++i) {
+	    if(cache[i] == mushroom_fields) ++mushroom_count;
+	    if(cache[i] == jungle) ++jungle_count;
+	    if(cache[i] == badlands) ++badlands_count;
+	    if(cache[i] == ice_spikes) ++ice_spikes_count;
+
+	    if(mushroom_count > 200 && jungle_count !=0 &&
+		badlands_count > 1000 && ice_spikes_count !=0) {
+		writeSeed(out, tid, seeds[s]);
+		break;
+	    }
+	}
     }
+
+    free(cache);
     
 #ifdef USE_PTHREAD
     pthread_exit(NULL);
 #endif
     return 0;
-}
-
-seed_info *loadSeedCsv(const char *fnam, int64_t *scnt) {
-    FILE *fp = fopen(fnam, "r");
-
-    seed_info si, *seeds;
-
-    if(fp == NULL) {
-	fprintf(stderr, "ERR loadSeedCsv: ");
-	return NULL;
-    }
-
-    *scnt = 0;
-
-    while(!feof(fp)) {
-	if(fscanf(fp, "%ld,%d,%d,%d,%d,%d,%d", &(si.seed),
-	    &(si.hut_1_7_x), &(si.hut_1_7_z),
-	    &(si.hut_1_8_x), &(si.hut_1_8_z),
-	    &(si.mon_x), &(si.mon_z)) == 1) ++(*scnt);
-	else while(!feof(fp) && fgetc(fp) != '\n');
-    }
-
-    seeds = malloc(sizeof(seed_info) * (*scnt));
-
-    rewind(fp);
-
-    for(int i = 0; i < *scnt && !feof(fp);) {
-	if(fscanf(fp, "%ld,%d,%d,%d,%d,%d,%d", &(seeds[i].seed),
-	    &(seeds[i].hut_1_7_x), &(seeds[i].hut_1_7_z),
-	    &(seeds[i].hut_1_8_x), &(seeds[i].hut_1_8_z),
-	    &(seeds[i].mon_x), &(seeds[i].mon_z)) == 1) ++(*scnt);
-	else while(!feof(fp) && fgetc(fp) != '\n');
-    }
-
-    fclose(fp);
-
-    return seeds;
 }
 
 void usage() {
@@ -164,8 +152,8 @@ int main(int argc, char *argv[]) {
 	exit(1);
     }
 
-    int64_t scnt;
-    seed_info *seeds = loadSeedCsv(in_list, &scnt);
+    int64_t scnt, *seeds;
+    seeds = loadSavedSeeds(in_list, &scnt);
     if(seeds == NULL) {
 	fprintf(stderr, "Could not parse seeds from \"%s\"\n", in_list);
 	usage();
@@ -177,8 +165,6 @@ int main(int argc, char *argv[]) {
 	fprintf(stderr, "Could not open \"%s\"\n", out_list);
 	exit(1);
     }
-    fprintf(out, "world seed,1.7 hut x,1.7 hut z,"
-	    "1.8 hut x,1.8 hut z,monument x,monument z\n");
     
     initBiomes();
 
@@ -218,6 +204,11 @@ int main(int argc, char *argv[]) {
 
     WaitForMultipleObjects(num_threads, threads, TRUE, INFINITE);
 #endif
+
+    free(threads);
+    free(info);
+    free(seeds);
+    fclose(out);
 
     return 0;
 }

@@ -17,9 +17,9 @@ endif
 all: release
 
 debug: CFLAGS += -DDEBUG -O0 -ggdb3
-debug: libcubiomes find_lower_bits find_origin_quads find_multi_bases find_final_seeds
+debug: libcubiomes find_lower_bits find_origin_quads find_multi_bases find_final_seeds find_rare_biomes
 release: CFLAGS += -O3 -march=native
-release: libcubiomes find_lower_bits find_origin_quads find_multi_bases find_final_seeds
+release: libcubiomes find_lower_bits find_origin_quads find_multi_bases find_final_seeds find_rare_biomes
 
 libcubiomes: CFLAGS += -fPIC
 libcubiomes: layers.o generator.o finders.o util.o
