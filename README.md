@@ -17,6 +17,3 @@ The seedfinding process is split up into 5 tools, described below:
 
 ## Warning
 These tools are not intended for general use, and are not polished or well-documented. If you have similar seed requirements to those above, you should probably just look through the seeds already found with these tools in [final_seeds.csv](https://github.com/Pineapplecake/nullspace-seedfinder/blob/master/seeds/final_seeds.csv) (No special biome requirements) or [best_seeds.csv](https://github.com/Pineapplecake/nullspace-seedfinder/blob/master/seeds/best_seeds.csv). (With biome requirements)
-
-## Compiling
-Compile the tools using the provided makefile. Each one can be specified as its own individual target, or they can all be compiled with optimizations using `make release`.
